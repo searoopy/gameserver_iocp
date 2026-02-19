@@ -28,6 +28,8 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
 			///클라 종료?
 			std::cout << "클라이언트 오버랩 null 키 == 0 !\n";
 
+			//클라 종료됨..주석테스트.
+
 			break;
 		}
 
