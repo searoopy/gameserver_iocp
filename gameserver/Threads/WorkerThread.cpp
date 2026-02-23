@@ -1,6 +1,6 @@
 #include "WorkerThread.h"
 #include "..\Common.h"
-#include "..\SessionManager.h"
+#include "..\Session\SessionManager.h"
 #include "..\PROTOCOL\ProcessPacket.h"
 
 void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
@@ -68,10 +68,13 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
 					(char*)&listenSocket, sizeof(SOCKET));
 
 				//[ 세션 객체 생성 및 등록 ] 
-				Session* newSession = new Session();
+				Session* newSession = GSessionManager.Acquire(); //new Session();
+				if (newSession == nullptr) {
+					closesocket(ovEx->sessionSocket); // 더 이상 받을 자리가 없음
+					break;
+				}
 				newSession->socket = ovEx->sessionSocket;
-				GSessionManager.Add(newSession);
-
+		
 				// 2. 새 클라이언트를 IOCP에 등록
 				CreateIoCompletionPort((HANDLE)ovEx->sessionSocket, hIOCP, (ULONG_PTR)newSession, 0);
 
@@ -111,11 +114,11 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
 				if (bytesTransferred == 0) {
 					// 중요: 0바이트 전송은 클라이언트의 정상 종료를 의미합니다.
 					std::cout << "클라이언트 접속 종료!\n";
-					GSessionManager.Remove(session);
+					GSessionManager.Release(session);
 					closesocket(session->socket);
 					//delete ovEx;
 
-					delete session;
+					///delete session;
 
 					GMemoryPool->Push(ovEx);
 					break;

@@ -80,7 +80,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PROTOCOL\PacketHandler.cpp" />
     <ClCompile Include="PROTOCOL\ProcessPacket.cpp" />
-    <ClCompile Include="SessionManager.cpp" />
+    <ClCompile Include="Session\SessionManager.cpp" />
     <ClCompile Include="Threads\MonitorSessions.cpp" />
     <ClCompile Include="Threads\WorkerThread.cpp" />
   </ItemGroup>
@@ -90,7 +90,8 @@
     <ClInclude Include="PROTOCOL\PacketHandler.h" />
     <ClInclude Include="PROTOCOL\ProcessPacket.h" />
     <ClInclude Include="PROTOCOL\Protocol.h" />
-    <ClInclude Include="SessionManager.h" />
+    <ClInclude Include="Session\Session.h" />
+    <ClInclude Include="Session\SessionManager.h" />
     <ClInclude Include="Threads\MonitorSessions.h" />
     <ClInclude Include="Threads\WorkerThread.h" />
   </ItemGroup>

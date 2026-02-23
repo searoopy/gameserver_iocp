@@ -1,7 +1,7 @@
 #include "MonitorSessions.h"
 #include <WinSock2.h>
 #include <chrono>
-#include "..\SessionManager.h"
+#include "..\Session\SessionManager.h"
 
 void MonitorSessions() {
     while (true) {
@@ -12,28 +12,26 @@ void MonitorSessions() {
 
         // 세션 매니저 내부에서 뮤텍스 락을 걸고 리스트를 가져와야 안전함
         // 예: lock_guard<mutex> lock(GSessionManager.GetMutex());
-        std::lock_guard<std::mutex> lock(GSessionManager.GetMutex());
+       // std::lock_guard<std::mutex> lock(GSessionManager.GetMutex());
 
-        auto& sessions = GSessionManager.GetSessions();
+        // 1. 스냅샷 찍기 (락 타임 최소화)
+        std::vector<Session*> activeSessions = GSessionManager.GetSessionsSnapshot();
+        
+        // 2. 락 밖에서 느긋하게 검사
+        for (Session* session : activeSessions) {
+            // 이미 나간 세션이면 패스
+            if (session->isFree || session->socket == INVALID_SOCKET) continue;
 
-        for (auto it = sessions.begin(); it != sessions.end(); ) {
-            Session* session = *it;
-
-            // 30초 동안 하트비트가 없으면 끊긴 것으로 간주
+            // 30초 타임아웃 체크
             if (currentTick - session->lastHeartbeatTick > 30000) {
-                std::cout << "[Monitor] 타임아웃 발생! 소켓 강제 종료. ID: " << session->socket << std::endl;
+                std::cout << "[Monitor] 타임아웃! ID: " << session->sessionID << std::endl;
 
-                // 소켓을 닫으면 WorkerThread의 GetQueuedCompletionStatus가 
-                // FALSE를 반환하거나 bytesTransferred 0을 받아 정리 로직이 돌아감
+                // 3. 강제 종료 수행
+                // 여기서 closesocket을 하면 WorkerThread에서 에러를 감지하고 
+                // 해당 스레드가 안전하게 Release(session)을 호출하게 됩니다.
+                // 직접 여기서 리스트를 지우는 것보다 소켓만 닫는 게 안전합니다.
                 closesocket(session->socket);
                 session->socket = INVALID_SOCKET;
-                // 리스트에서 제거 및 메모리 해제
-                it = sessions.erase(it);
-
-               
-            }
-            else {
-                ++it;
             }
         }
     }

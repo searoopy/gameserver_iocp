@@ -12,7 +12,8 @@
 
 #include "PROTOCOL\Protocol.h"
 #include "MemoryPool.h"
-#include "SessionManager.h"
+#include "Session/SessionManager.h"
+#include "Session/Session.h"
 #include "PROTOCOL\PacketHandler.h"
 
 
@@ -29,6 +30,8 @@ struct OverlappedEx {
 	IO_TYPE type;          // 작업 종류
 	SOCKET sessionSocket;    // AcceptEx 시 새로 생성한 소켓 보관용
 	char buffer[128];       // 데이터 수신용 버퍼
+
+	OverlappedEx* next = nullptr; // lock -free stack을 위한 링크.
 };
 
 

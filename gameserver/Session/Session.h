@@ -1,16 +1,20 @@
 #pragma once
-#include <set>
+
+#include <WinSock2.h>
 #include <mutex>
-#include "Common.h"
+#include "..\Common.h"
 #include <list>
 #include <string>
-//#include <map>
+
+
 
 // 클라이언트 정보를 담는 세션
 struct Session {
 	SOCKET socket;
 	char recvBuffer[1024 * 10];
 
+	bool isFree = true;
+	int32_t sessionID = -1;
 
 	// 여기에 나중에 OverlappedEx 객체들을 추가할 겁니다.
 
@@ -25,16 +29,27 @@ struct Session {
 		userUid = -1;
 		nickname.clear();
 		isAuth = false;
+		isFree = true;
+		readPos = 0;
+		writePos = 0;
+		lastHeartbeatTick = GetTickCount64();
+
+
+
+		x = 0.0f;
+		y = 0.0f;
+		yaw = 0.0f;
 	}
+
+	float x = 0.0f;
+	float y = 0.0f;
+	float yaw = 0.0f;
 
 
 	//send용 변수들.
 	std::mutex sendMutex;
 	std::queue<OverlappedEx*> sendQueue; // 보낼 데이터 담아 두는곳.
 	bool isSending = false;
-
-
-
 	int readPos;
 	int writePos;
 
@@ -43,7 +58,7 @@ struct Session {
 	Session() : socket(INVALID_SOCKET), readPos(0), writePos(0) {
 		memset(recvBuffer, 0, sizeof(recvBuffer));
 
-		lastHeartbeatTick = GetTickCount64();
+		Reset();
 
 	}
 
@@ -85,49 +100,3 @@ struct Session {
 
 };
 
-
-
-
-
-class SessionManager {
-public:
-    void Add(Session* session) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        //m_sessions.insert(session);
-        m_sessions.emplace_back(session);
-        std::cout << "세션 추가됨. 현재 접속자: " << m_sessions.size() << "명" << std::endl;
-    }
-
-    void Remove(Session* session) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        //m_sessions.erase(session);
-        m_sessions.remove(session);
-        std::cout << "세션 제거됨. 현재 접속자: " << m_sessions.size() << "명" << std::endl;
-    }
-
-
-	std::vector<Session*> GetSessionsCopy() {
-		std::lock_guard<std::mutex> lock(m_mutex);
-		return std::vector<Session*>(m_sessions.begin(), m_sessions.end());
-	}
-
-	std::list<Session*>& GetSessions() { return m_sessions; }
-	std::mutex& GetMutex() { return m_mutex; }
-
-    // 모든 접속자에게 패킷 전송 (채팅 등)
-    void Broadcast(char* buffer, int len);
-    void Broadcast(OverlappedEx* sendOv);
-
-
-private:
-    std::mutex m_mutex;
-    std::list<Session*> m_sessions;
-};
-
-
-
-void SendPacket(Session* session, OverlappedEx* sendOv);
-void HandleDisconnect(Session* session);
-
-
-extern SessionManager GSessionManager;

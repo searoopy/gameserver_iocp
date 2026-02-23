@@ -23,7 +23,7 @@
 
 #include "Common.h"
 #include "MemoryPool.h"
-#include "SessionManager.h"
+#include "Session\SessionManager.h"
 #include "PROTOCOL\ProcessPacket.h"
 #include "Threads\WorkerThread.h"
 #include "Threads\MonitorSessions.h"
@@ -48,11 +48,7 @@ int main()
 		return 0;
 	}
 
-
-
-	GMemoryPool = new MemoryPool(100); // 1000俺 固府 积己
-
-
+	GMemoryPool = new MemoryPool(MAX_SESSION*4); // 悼立*4父怒 快钎 固府 积己
 
 
 	//2. iocp 勤甸 积己.

@@ -33,6 +33,7 @@ bool RegisterAccept(HANDLE hIOCP, SOCKET listenSocket) {
 		&bytesReceived, (LPOVERLAPPED)acceptContext) == FALSE) {
 		if (WSAGetLastError() != ERROR_IO_PENDING) {
 			//delete acceptContext;
+			closesocket(clientSocket);
 			GMemoryPool->Push(acceptContext);
 			return false;
 		}
