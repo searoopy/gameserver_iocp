@@ -1,5 +1,5 @@
 #include "Common.h"
-
+#include "MemoryPool.h"
 
 LPFN_ACCEPTEX lpfnAcceptEx = NULL; // 함수 포인터 저장용
 
@@ -39,4 +39,25 @@ bool RegisterAccept(HANDLE hIOCP, SOCKET listenSocket) {
 		}
 	}
 	return true;
+}
+
+
+// 소켓 생성 직후 또는 Accept 완료 후 호출
+void OptimizeSocketBuffer(SOCKET socket) {
+	int bufferSize = 64 * 1024; // 64KB (기본값보다 크게 설정)
+
+	// 수신 버퍼 크기 설정
+	if (setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char*)&bufferSize, sizeof(bufferSize)) == SOCKET_ERROR) {
+		std::cerr << "RCVBUF 설정 실패: " << WSAGetLastError() << std::endl;
+	}
+
+	// 송신 버퍼 크기 설정
+	if (setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char*)&bufferSize, sizeof(bufferSize)) == SOCKET_ERROR) {
+		std::cerr << "SNDBUF 설정 실패: " << WSAGetLastError() << std::endl;
+	}
+
+	// [고급] TCP No Delay 설정 (Nagle 알고리즘 끄기)
+	// 작은 패킷(이동, 하트비트)을 즉시 전송하게 하여 반응성 향상
+	BOOL optVal = TRUE;
+	setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, (char*)&optVal, sizeof(optVal));
 }

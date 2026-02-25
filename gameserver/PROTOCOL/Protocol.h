@@ -24,7 +24,7 @@ enum class Packet_S2C : uint16_t {
     CHAT_RES = 2, // 브로드캐스트용 채팅
     MOVE_RES = 3, // 유저 이동 정보 전송
     ENTER_USER = 4, //새로운 유저가 입장함.
-
+    LEAVE_USER = 5, ///유저 아웃...
 };
 
 
@@ -41,7 +41,7 @@ struct C2S_MovePacket
 {
     PacketHeader header;
     float x, y;
-    float yaw; //바라보는 방향.
+   // float yaw; //바라보는 방향.
 
 };
 
@@ -64,7 +64,7 @@ struct S2C_MovePacket
     PacketHeader header;
     int32_t userUid;
     float x, y;
-    float yaw; //바라보는 방향.
+   // float yaw; //바라보는 방향.
 
 };
 
@@ -75,7 +75,12 @@ struct S2C_EnterUserPacket {
     // 닉네임 등을 추가할 수도 있습니다.
 };
 
+struct S2C_LeaveUserPacket 
+{
+    PacketHeader header;
+    int32_t userUid;
 
+};
 
 
 #pragma pack(pop)

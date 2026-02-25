@@ -1,5 +1,6 @@
 #include "ProcessPacket.h"
-
+#include "PacketHandler.h"
+#include "..\Session\Session.h"
 #include "protocol.h"
 #include "..\Common.h"
 
@@ -34,7 +35,7 @@ void ProcessPacket(Session* session, PacketHeader* header) {
         {
             // 여기에 실제 게임 로직 (채팅 전달, 이동 처리 등) 작성
             // 현재는 테스트를 위해 수신 알림만 출력
-            std::cout << "패킷 처리 중... ID: " << header->id << ", Size: " << header->size << std::endl;
+            //std::cout << "패킷 처리 중... ID: " << header->id << ", Size: " << header->size << std::endl;
 
 
             //GSessionManager.Broadcast( session->)
@@ -48,7 +49,7 @@ void ProcessPacket(Session* session, PacketHeader* header) {
         {
             // 여기에 실제 게임 로직 (채팅 전달, 이동 처리 등) 작성
             // 현재는 테스트를 위해 수신 알림만 출력
-            std::cout << "패킷 처리 중... ID: " << header->id << ", Size: " << header->size << std::endl;
+            //std::cout << "패킷 처리 중... ID: " << header->id << ", Size: " << header->size << std::endl;
 
 
             //GSessionManager.Broadcast( session->)
@@ -65,7 +66,7 @@ void ProcessPacket(Session* session, PacketHeader* header) {
         case Packet_C2S::ENTER:
         {
 
-            std::cout << "클라이언트 입장! " << header->id << ", Size: " << header->size << std::endl;
+           // std::cout << "클라이언트 입장! " << header->id << ", Size: " << header->size << std::endl;
 
             PacketHandler::Handle_C2S_ENTER(session, header);
 

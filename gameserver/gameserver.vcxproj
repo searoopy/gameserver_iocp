@@ -83,6 +83,7 @@
     <ClCompile Include="Session\SessionManager.cpp" />
     <ClCompile Include="Threads\MonitorSessions.cpp" />
     <ClCompile Include="Threads\WorkerThread.cpp" />
+    <ClCompile Include="Util\Util.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common.h" />
@@ -94,6 +95,7 @@
     <ClInclude Include="Session\SessionManager.h" />
     <ClInclude Include="Threads\MonitorSessions.h" />
     <ClInclude Include="Threads\WorkerThread.h" />
+    <ClInclude Include="Util\Util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

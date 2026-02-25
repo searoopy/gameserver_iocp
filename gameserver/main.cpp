@@ -48,7 +48,7 @@ int main()
 		return 0;
 	}
 
-	GMemoryPool = new MemoryPool(MAX_SESSION*4); // 동접*4만큼 우표 미리 생성
+	GMemoryPool = new MemoryPool(MAX_SESSION*20); // 동접*4만큼 우표 미리 생성
 
 
 	//2. iocp 핸들 생성.
@@ -89,7 +89,7 @@ int main()
 
 
 	//3. listen 시작.
-	if (listen(listenSocket, SOMAXCONN) == SOCKET_ERROR)
+	if (listen(listenSocket, 1024) == SOCKET_ERROR)
 	{
 		std::cout << "Listen 실패 \n";
 		return 0;
@@ -107,7 +107,7 @@ int main()
 
 	LoadAcceptEx(listenSocket); // <--- 이게 RegisterAccept보다 먼저 와야 함!
 
-	for (int i = 0; i < 5; i++) {
+	for (int i = 0; i < 100; i++) {
 		RegisterAccept(hIOCP, listenSocket);
 	}
 
