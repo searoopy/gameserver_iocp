@@ -42,6 +42,21 @@
     <ClCompile Include="Util\Util.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="Monster\MonsterThread.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Debug.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Monster\MonsterMgr.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="GROUND_TILE\TileMgr.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Threads\SessionThread.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MemoryPool.h">
@@ -72,6 +87,27 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="Util\Util.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Monster\MonsterThread.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Debug.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Monster\Monster.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Monster\MonsterMgr.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="GROUND_TILE\TileMgr.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="GROUND_TILE\AStar.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Threads\SessionThread.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

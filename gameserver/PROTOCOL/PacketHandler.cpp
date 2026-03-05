@@ -1,6 +1,8 @@
 #include "PacketHandler.h"
 #include "..\Session\SessionManager.h"
 #include "Protocol.h"
+#include "..\GROUND_TILE\AStar.h"
+#include "..\GROUND_TILE\TileMgr.h"
 
 void PacketHandler::Handle_C2S_LOGIN(Session* session, PacketHeader* header)
 {
@@ -125,4 +127,34 @@ void PacketHandler::Handle_C2S_ENTER(Session* session, PacketHeader* header) {
 
     // 4. 본인에게는 성공 응답 패킷 전송
     // Send_S2C_EnterGameOk(session);
+}
+
+
+
+void PacketHandler::Handle_C2S_TARGET_MOVE(Session* session, PacketHeader* header) {
+
+    if (session->isAuth == false) {
+        closesocket(session->socket);
+        session->socket = INVALID_SOCKET;
+        return;
+    }
+
+
+    // 1. 패킷 데이터 캐스팅
+    C2S_TargetMovePacket* pkt = reinterpret_cast<C2S_TargetMovePacket*>(header);
+
+    // 2. 서버 내 유저 정보 갱신 (보통 여기서 이동이 가능한 지형인지 검증 로직이 들어감)
+    int _targetX = pkt->x;
+    int _targetY = pkt->y;
+
+    Pos start = { (int)session->x ,  (int)session->y };
+    Pos dest = { _targetX, _targetY };
+
+    std::deque<Pos> newPath = AStar::FindPath(g_tileMgr.GetMap(), start, dest);
+
+    if (!newPath.empty()) {
+        std::lock_guard<std::mutex> lock(session->moveMutex);
+        session->pathQueue = std::move(newPath); // 세션에 경로 저장
+        session->isMoving = true;
+    }
 }

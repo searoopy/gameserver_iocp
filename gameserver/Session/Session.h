@@ -8,6 +8,7 @@
 #include "..\Util\Util.h"
 #include "..\Common.h"
 #include "..\MemoryPool.h"
+#include "..\GROUND_TILE\AStar.h"
 #include <random>
 
 
@@ -23,12 +24,21 @@ struct Session {
 	// 여기에 나중에 OverlappedEx 객체들을 추가할 겁니다.
 
 	uint64_t lastHeartbeatTick = 0;
-	float x = 0.0f;
-	float y = 0.0f;
+	int x = 0;
+	int y = 0;
 	float yaw = 0.0f;
 	int32_t userUid = -1;	//db상 고유번호
 	std::wstring nickname;	//유저 닉네임
 	bool isAuth = false;	//로그인 인증여부
+
+
+	//이동용 락
+	std::mutex moveMutex;
+	bool isMoving = false;
+	float moveTimer = 0.0f;
+	std::deque<Pos> pathQueue;
+	float speed = 20.0f;
+
 
 	//send용 변수들.
 	std::mutex sendMutex;
@@ -48,9 +58,10 @@ struct Session {
 		readPos = 0;
 		writePos = 0;
 		lastHeartbeatTick = GetTickCount64();
-
-		x = static_cast<float>(get_random_number(0, 375));
-		y = static_cast<float>(get_random_number(0, 667)) ;
+		isMoving = false;
+		moveTimer = 0.0f;
+		x = 1;//static_cast<float>(get_random_number(0, 375));
+		y = 1;//static_cast<float>(get_random_number(0, 667));
 
 		yaw = 0.0f;
 

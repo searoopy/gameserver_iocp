@@ -73,6 +73,17 @@ void ProcessPacket(Session* session, PacketHeader* header) {
         }
         break;
 
+
+        case Packet_C2S::TARGET_MOVE:
+        {
+
+            // std::cout << "클라이언트 입장! " << header->id << ", Size: " << header->size << std::endl;
+
+            PacketHandler::Handle_C2S_TARGET_MOVE(session, header);
+
+        }
+        break;
+
         case Packet_C2S::HEARTBEAT:
         {
 

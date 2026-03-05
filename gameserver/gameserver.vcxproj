@@ -76,24 +76,36 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Common.cpp" />
+    <ClCompile Include="Debug.cpp" />
+    <ClCompile Include="GROUND_TILE\TileMgr.cpp" />
     <ClCompile Include="MemoryPool.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Monster\MonsterMgr.cpp" />
+    <ClCompile Include="Monster\MonsterThread.cpp" />
     <ClCompile Include="PROTOCOL\PacketHandler.cpp" />
     <ClCompile Include="PROTOCOL\ProcessPacket.cpp" />
     <ClCompile Include="Session\SessionManager.cpp" />
     <ClCompile Include="Threads\MonitorSessions.cpp" />
+    <ClCompile Include="Threads\SessionThread.cpp" />
     <ClCompile Include="Threads\WorkerThread.cpp" />
     <ClCompile Include="Util\Util.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Common.h" />
+    <ClInclude Include="Debug.h" />
+    <ClInclude Include="GROUND_TILE\AStar.h" />
+    <ClInclude Include="GROUND_TILE\TileMgr.h" />
     <ClInclude Include="MemoryPool.h" />
+    <ClInclude Include="Monster\Monster.h" />
+    <ClInclude Include="Monster\MonsterMgr.h" />
+    <ClInclude Include="Monster\MonsterThread.h" />
     <ClInclude Include="PROTOCOL\PacketHandler.h" />
     <ClInclude Include="PROTOCOL\ProcessPacket.h" />
     <ClInclude Include="PROTOCOL\Protocol.h" />
     <ClInclude Include="Session\Session.h" />
     <ClInclude Include="Session\SessionManager.h" />
     <ClInclude Include="Threads\MonitorSessions.h" />
+    <ClInclude Include="Threads\SessionThread.h" />
     <ClInclude Include="Threads\WorkerThread.h" />
     <ClInclude Include="Util\Util.h" />
   </ItemGroup>

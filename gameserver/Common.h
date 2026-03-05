@@ -10,6 +10,7 @@
 #include <queue>
 
 
+
 //#include "PROTOCOL\Protocol.h"
 //#include "MemoryPool.h"
 //#include "Session/SessionManager.h"
@@ -19,6 +20,8 @@
 
 //현대 운영체제(Windows)의 메모리 관리 최소 단위인 Page Size가 보통 **$4KB$**입니다.
 #define MAX_BUFFER_SIZE 1024*4
+
+
 //TCP의 수신 윈도우(Receive Window) 기본 최대치가
 // $64KB$ 근처이기 때문에,
 // 창고(Session Buffer) 크기를 이 정도로 맞춰주면 네트워크 카드가 보내주는 데이터를 병목 현상 없이 그대로 받아낼 수 있습니다.

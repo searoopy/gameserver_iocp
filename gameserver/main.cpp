@@ -27,8 +27,8 @@
 #include "PROTOCOL\ProcessPacket.h"
 #include "Threads\WorkerThread.h"
 #include "Threads\MonitorSessions.h"
-
-
+#include "Monster/MonsterThread.h"
+#include "Threads/SessionThread.h"
 
 int main()
 {
@@ -132,7 +132,12 @@ int main()
 
 
 
+	//몬스터 스레드 생성
+	StartMonsterThread();
 
+
+	//세션 스레드 생성.
+	StartSessionThread();
 
 
 	//종료 방지용...
@@ -166,7 +171,8 @@ int main()
 		}
 	}
 
-
+	CleanMonsterThread();
+	CleanSessionThread();
 
 
 	//정리...

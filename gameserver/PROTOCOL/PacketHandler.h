@@ -14,5 +14,6 @@ public:
     static void Handle_C2S_CHAT(Session* session, PacketHeader* header);
     static void Handle_C2S_MOVE(Session* session, PacketHeader* header);
     static void Handle_C2S_ENTER(Session* session, PacketHeader* header);
+    static void Handle_C2S_TARGET_MOVE(Session* session, PacketHeader* header);
     // ... 수많은 패킷 처리 함수들
 };

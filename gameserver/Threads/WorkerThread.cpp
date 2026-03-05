@@ -5,7 +5,6 @@
 #include "..\PROTOCOL\Protocol.h"
 
 
-#define MAX_BUFFER_SIZE 1024
 void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
 {
     DWORD bytesTransferred;

@@ -2,6 +2,7 @@
 #include "Session.h"
 #include "..\Common.h"
 #include "..\PROTOCOL\Protocol.h"
+#include "..\Monster\Monster.h"
 
 SessionManager GSessionManager;
 
@@ -112,7 +113,7 @@ void SessionManager::BroadcastLeaveUser(int32_t leavingUserUid) {
         OverlappedEx* sendOv = GMemoryPool->Pop();
         if (sendOv == nullptr) continue;
 
-        memset(sendOv, 0, sizeof(OVERLAPPED));
+        memset(sendOv, 0, sizeof(OverlappedEx));
         sendOv->type = IO_TYPE::SEND;
         memcpy(sendOv->buffer, &leavePkt, sizeof(S2C_LeaveUserPacket));
 
@@ -120,6 +121,169 @@ void SessionManager::BroadcastLeaveUser(int32_t leavingUserUid) {
         // Gather Write가 적용된 SendPacket 호출
         // 이제 120명 상황에서도 시스템 콜 부담 없이 순식간에 알림이 전달됩니다.
         SendPacket(target, sendOv);
+    }
+
+
+}
+
+void SessionManager::BroadcastMonsterMove(Monster* monster)
+{
+    if (monster == nullptr) return;
+
+    //접속자가 없으면 안보냄.
+    if (m_connectedCount == 0) return;
+
+    // 1. 패킷 데이터 준비
+    S2C_MonsterMovePacket pkt;
+    pkt.header.size = sizeof(S2C_MonsterMovePacket);
+    pkt.header.id = (uint16_t)Packet_S2C::MONSTER_MOVE;
+    pkt.userUid = -1;
+    pkt.monsterId = monster->monsterId;
+    pkt.x = monster->pos.x.load(); // atomic 읽기
+    pkt.y = monster->pos.y.load();
+
+    // 2. 유저 목록 스냅샷 (락 최소화)
+    std::vector<Session*> targets = GetSessionsSnapshot();
+
+    // 3. 거리 기반 필터링 및 전송
+    const float VIEW_RANGE = 1000.0f; // 몬스터를 볼 수 있는 거리 (픽셀 단위)
+
+    for (Session* target : targets) {
+        // 세션 유효성 체크
+        if (target->isFree.load() || target->socket == INVALID_SOCKET)
+            continue;
+
+        // [핵심] 거리 체크 (피타고라스 정리)
+        float diffX = pkt.x - target->x;
+        float diffY = pkt.y - target->y;
+        float distSq = (diffX * diffX) + (diffY * diffY);
+
+        if (distSq <= VIEW_RANGE * VIEW_RANGE) {
+            // 전송용 OverlappedEx 할당
+            OverlappedEx* sendOv = GMemoryPool->Pop();
+            if (sendOv == nullptr) continue;
+
+            memset(sendOv, 0, sizeof(OverlappedEx));
+            sendOv->type = IO_TYPE::SEND;
+            memcpy(sendOv->buffer, &pkt, sizeof(S2C_MonsterMovePacket));
+
+            // Gather Write가 적용된 SendPacket 호출
+            SendPacket(target, sendOv);
+        }
+    }
+
+}
+void SessionManager::BroadcastAllLocations()
+{
+    std::vector<PlayerPosInfo> movingPlayers;
+    std::vector<Session*> targets = GetSessionsSnapshot();
+
+    for (Session* s : targets) {
+        if (s->isMoving) {
+            movingPlayers.push_back({ s->userUid, s->x, s->y });
+        }
+    }
+
+    if (movingPlayers.empty()) return;
+
+    // --- 패킷 분할 로직 ---
+    const int MAX_PLAYERS_PER_PACKET = 300; // 안전하게 300명씩 끊어서 전송
+    int totalMoving = static_cast<int>(movingPlayers.size());
+
+    for (int i = 0; i < totalMoving; i += MAX_PLAYERS_PER_PACKET) {
+        int countToSend = min(MAX_PLAYERS_PER_PACKET, totalMoving - i);
+        uint16_t packetSize = sizeof(S2C_AllLocationPacket) + (sizeof(PlayerPosInfo) * countToSend);
+
+        for (Session* target : targets) {
+            if (target->isFree.load() || target->socket == INVALID_SOCKET) continue;
+
+            OverlappedEx* sendOv = GMemoryPool->Pop();
+            S2C_AllLocationPacket* pkt = reinterpret_cast<S2C_AllLocationPacket*>(sendOv->buffer);
+
+            pkt->header.size = packetSize;
+            pkt->header.id = static_cast<uint16_t>(Packet_S2C::ALL_LOCATE);
+            pkt->playerCount = static_cast<uint16_t>(countToSend);
+
+            // i번째 인덱스부터 countToSend만큼 복사
+            memcpy(sendOv->buffer + sizeof(S2C_AllLocationPacket),
+                &movingPlayers[i],
+                sizeof(PlayerPosInfo) * countToSend);
+
+            SendPacket(target, sendOv);
+        }
+    }
+}
+
+
+
+void SessionManager::UpdateSssionMovement(float deltaTime)
+{
+    std::vector<Session*> targets = GetSessionsSnapshot();
+
+  
+    for (Session* target : targets)
+    {
+
+        if (!target->isMoving) continue;
+
+        // 3. 개별 세션에 대해서만 락을 걸고 정밀 계산
+        {
+            std::lock_guard<std::mutex> lock(target->moveMutex);
+
+            // 락을 잡은 후 다시 확인 (그 사이 멈췄을 수 있음)
+            if (!target->isMoving || target->pathQueue.empty()) continue;
+
+            // 실제 좌표 계산 로직 수행
+            ProcessMovement(target, deltaTime);
+        }
+
+    }
+
+
+
+}
+
+void SessionManager::ProcessMovement(Session* session, float deltaTime)
+{
+
+    // 1. 목적지가 없으면 이동 종료
+    if (session->pathQueue.empty()) {
+        session->isMoving = false;
+        session->moveTimer = 0.0f;
+        return;
+    }
+
+    // 2. 타이머 누적
+    session->moveTimer += deltaTime;
+
+    // 3. 한 칸 이동에 필요한 시간 계산 (예: speed가 5면 0.2초)
+    float timePerTile = 1.0f / session->speed;
+
+    // 4. 시간이 충족되면 실제 타일 좌표 변경
+    if (session->moveTimer >= timePerTile) {
+        Pos nextTile = session->pathQueue.front();
+
+        // 정수 좌표 업데이트
+        session->x = nextTile.x;
+        session->y = nextTile.y;
+
+        // 데이터 소비
+        session->pathQueue.pop_front();
+
+        // 타이머 차감 (남은 시간을 이월시켜 프레임 드랍 보정)
+        session->moveTimer -= timePerTile;
+
+        // 목적지 도달 시 종료 처리
+        if (session->pathQueue.empty()) {
+            session->isMoving = false;
+            session->moveTimer = 0.0f;
+        }
+
+        // [중요] 타일이 바뀌었을 때만 클라이언트에 브로드캐스트를 유도할 수 있음
+        //브로드 캐스트는 세션 스레드에서 일괄적으로 함.
+
+
+
     }
 
 
@@ -151,9 +315,9 @@ void SendPacket(Session* session, OverlappedEx* sendOv) {
             session->isSending = true;
             initiateSend = true;
 
-            // 큐에 있는 패킷들을 최대 32개까지 Gather
+            // 큐에 있는 패킷들을 최대 WSA_BUFF_CNT(32)개까지 Gather
             for (auto* ov : session->sendQueue) {
-                if (bufCount >= 32) break;
+                if (bufCount >= WSA_BUFF_CNT) break;
 
                 wsaBufs[bufCount].buf = ov->buffer;
                 wsaBufs[bufCount].len = reinterpret_cast<PacketHeader*>(ov->buffer)->size;

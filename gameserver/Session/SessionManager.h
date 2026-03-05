@@ -10,6 +10,8 @@
 
 const int MAX_SESSION = 5000; //최대 동접자수.
 
+class Monster;
+
 class SessionManager {
 public:
 
@@ -124,6 +126,11 @@ public:
     void Broadcast(OverlappedEx* sendOv);
     void BroadcastNewUser(Session* newUser);
     void BroadcastLeaveUser(int32_t leavingUser);
+    void BroadcastMonsterMove(Monster* monster);
+    void BroadcastAllLocations();
+
+    void UpdateSssionMovement(float deltaTime);
+    void ProcessMovement( Session* session , float deltaTime);
 
 private:
     std::mutex m_poolMutex;      // 세션 할당/반납용 락
