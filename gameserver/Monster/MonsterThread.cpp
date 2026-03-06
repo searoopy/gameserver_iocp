@@ -4,6 +4,7 @@
 #include "..\Debug.h"
 
 #include "..\Session\SessionManager.h"
+#include "..\GROUND_TILE\TileMgr.h"
 
 #include <chrono>
 #include <thread>
@@ -18,6 +19,7 @@ std::thread g_MonsterThread;
 void MonsterThread()
 {
     g_MonsterManager.CreateMonsters(20);
+    auto lastTick = std::chrono::steady_clock::now();
 
 	while (g_MonsterThreadRun)
 	{
@@ -26,8 +28,14 @@ void MonsterThread()
         auto frameStart = std::chrono::high_resolution_clock::now();
 
         // 1. 이번 프레임에 업데이트할 몬스터들만 처리 (시분할)
-        
-		UpdateMonsters();
+        auto currentTick = std::chrono::steady_clock::now();
+        // 실제 경과 시간(deltaTime) 계산
+        float deltaTime = std::chrono::duration<float>(currentTick - lastTick).count();
+        lastTick = currentTick;
+
+
+
+		UpdateMonsters(deltaTime);
 
         LOG("몬스터 스레드 작동중...\n");
 
@@ -70,12 +78,16 @@ void CleanMonsterThread() {
 
 
 
-
-void UpdateMonsters()
+//몬스터 스레드는 싱글스레드임....(참고)
+void UpdateMonsters(float deltaTime)
 {
 
     auto& monsters = g_MonsterManager.GetMonsters();
     if (monsters.empty()) return;
+
+
+    std::vector<Session*> _sessions =  g_SessionManager.GetSessionsSnapshot();
+
 
     // 시분할을 위해 static 인덱스 유지
     static int currentIdx = 0;
@@ -87,16 +99,68 @@ void UpdateMonsters()
         Monster* monster = monsters[currentIdx++];
 
         // 간단한 랜덤 이동 AI 예시
-        if (monster->hp > 0) {
-            float dx = (rand() % 3 - 1) * 2.0f; // -2, 0, 2 중 하나
-            float dy = (rand() % 3 - 1) * 2.0f;
+        if (monster->hp > 0)
+        {
 
-            monster->pos.x = monster->pos.x + dx;
-            monster->pos.y = monster->pos.y + dy;
+            monster->moveTimer += deltaTime;
+
+            //  한 칸 이동에 필요한 시간 계산 (예: speed가 5면 0.2초)
+            float timePerTile = 1.0f / monster->speed;
+
+            //이동할 시간이 되면 이동.....
+            if (monster->moveTimer >= timePerTile) 
+            {
+
+                monster->moveTimer -= timePerTile;
+
+                //가까운 유저 추적...
+                for (Session* session : _sessions)
+                {
+                    // 2. 인증된 유저인지, 살아있는지 확인
+                    if (!session->isAuth || session->isFree) continue;
+
+
+
+
+
+                    int targetX = session->x;
+                    int targetY = session->y;
+                    int monsterX = monster->pos.x;
+                    int monsterY = monster->pos.y;
+
+                    int nextX = monsterX;
+                    int nextY = monsterY;
+
+                    // 단순 추적 로직 (장애물 고려 X)
+                    if (targetX > monsterX) nextX++;
+                    else if (targetX < monsterX) nextX--;
+                    else if (targetY > monsterY) nextY++;
+                    else if (targetY < monsterY) nextY--;
+
+                    if (g_tileMgr.IsWalkable(nextX, nextY) && !g_tileMgr.IsOccupied(nextX, nextY)) {
+                        // 기존 타일 점유 해제
+                        g_tileMgr.SetOccupied(monsterX, monsterY, ENUM_TILE_NAME::empty);
+
+                        // 새로운 타일 점유 및 이동
+                        monster->pos.x = nextX;
+                        monster->pos.y = nextY;
+                        g_tileMgr.SetOccupied(nextX, nextY, ENUM_TILE_NAME::monster);
+
+                    }//갈수있는 타일인지 검사 끝.
+
+                }
+
+
+
+
+            }
+
+
 
             // 여기서 주변 유저가 있다면 이동 패킷 브로드캐스트!
-            GSessionManager.BroadcastMonsterMove(monster);
-        }
+            g_SessionManager.BroadcastMonsterMove(monster);
+
+        }///hp >0 
 
 
     }

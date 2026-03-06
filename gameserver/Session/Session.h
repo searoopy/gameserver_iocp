@@ -60,6 +60,7 @@ struct Session {
 		lastHeartbeatTick = GetTickCount64();
 		isMoving = false;
 		moveTimer = 0.0f;
+
 		x = 1;//static_cast<float>(get_random_number(0, 375));
 		y = 1;//static_cast<float>(get_random_number(0, 667));
 

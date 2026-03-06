@@ -5,6 +5,7 @@
 #include <deque>
 #include <cmath>
 #include <algorithm>
+#include "TileMgr.h"
 
 
 struct Pos
@@ -31,7 +32,7 @@ class AStar
 {
 public:
 	//맵 데이터와 시작/목적지를 받아 경로 반환.
-	static std::deque<Pos> FindPath(const std::vector<std::vector<int>>& map, Pos start, Pos dest)
+	static std::deque<Pos> FindPath(const std::vector<std::vector<ENUM_TILE_NAME>>& map, Pos start, Pos dest)
 	{
 		int height = map.size();
 		int width = map[0].size();
@@ -68,7 +69,7 @@ public:
 				Pos next = { current.pos.x + d.x, current.pos.y + d.y };
 
 				if (next.x >= 0 && next.x < width && next.y >= 0 && next.y < height &&
-					map[next.y][next.x] == 0 && !closedList[next.y][next.x]) {
+					map[next.y][next.x] == ENUM_TILE_NAME::empty && !closedList[next.y][next.x]) {
 
 					int nextG = current.g + 1;
 					parentMap[next.y][next.x] = current.pos;

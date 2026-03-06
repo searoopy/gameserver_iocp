@@ -1,6 +1,6 @@
 #include "TileMgr.h"
 #include <random>
-
+#include "..\Debug.h"
 
 TileMgr g_tileMgr;
 
@@ -64,10 +64,11 @@ void TileMgr::GenerateMap()
     //    }
     //}
 
-    _map.assign(MAX_TILE_Y, std::vector<int>(MAX_TILE_X));
+    map.assign(MAX_TILE_Y, std::vector< ENUM_TILE_NAME  >(MAX_TILE_X));
     for (int y = 0; y < MAX_TILE_Y; ++y) {
         for (int x = 0; x < MAX_TILE_X; ++x) {
-            _map[y][x] = g_TestMap[y][x];
+            map[y][x] = static_cast<ENUM_TILE_NAME>(g_TestMap[y][x]);
+            tile_atomic[y][x] = static_cast<ENUM_TILE_NAME>(g_TestMap[y][x]);
         }
     }
 
@@ -78,7 +79,49 @@ bool TileMgr::IsWall(int x, int y)
    // if (x < 0 || x >= MAX_TILE_X || y < 0 || y >= MAX_TILE_Y) return true;
    // return tile[y][x] == 1;
     if (x < 0 || x >= MAX_TILE_X || y < 0 || y >= MAX_TILE_Y) return true;
-    return _map[y][x] == 1;
+    return map[y][x] == ENUM_TILE_NAME::wall;
+}
+
+void TileMgr::SetOccupied(int nextX, int nextY, ENUM_TILE_NAME value)
+{
+
+    if (nextX < 0 || nextX >= MAX_TILE_X || nextY < 0 || nextY >= MAX_TILE_Y)
+    {
+        LOG("SetOccupied out of index\n");
+        return;
+    }
+
+   // if (map[nextY][nextX] != ENUM_TILE_NAME::wall)
+    if (tile_atomic[nextY][nextX] != ENUM_TILE_NAME::wall)
+        tile_atomic[nextY][nextX] = value;
+}
+
+bool TileMgr::IsOccupied(int nextX, int nextY)
+{
+    if (nextX < 0 || nextX >= MAX_TILE_X || nextY < 0 || nextY >= MAX_TILE_Y)
+    {
+        LOG("IsOccupied out of index\n");
+        return true ;
+    }
+
+
+    return (tile_atomic[nextY][nextX] == ENUM_TILE_NAME::monster ||
+        tile_atomic[nextY][nextX] == ENUM_TILE_NAME::wall ||
+        tile_atomic[nextY][nextX] == ENUM_TILE_NAME::player);
+
+
+}
+
+bool TileMgr::IsWalkable(int nextX, int nextY)
+{
+    if (nextX < 0 || nextX >= MAX_TILE_X || nextY < 0 || nextY >= MAX_TILE_Y)
+    {
+        LOG("IsWalkable out of index\n");
+        return false;
+    }
+
+    return  map[nextX][nextY] == ENUM_TILE_NAME::empty;
+   // return false;
 }
 
 

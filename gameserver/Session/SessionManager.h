@@ -147,4 +147,4 @@ void SendPacket(Session* session, OverlappedEx* sendOv);
 void HandleDisconnect(Session* session);
 
 
-extern SessionManager GSessionManager;
+extern SessionManager g_SessionManager;

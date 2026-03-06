@@ -38,7 +38,7 @@ void ProcessPacket(Session* session, PacketHeader* header) {
             //std::cout << "패킷 처리 중... ID: " << header->id << ", Size: " << header->size << std::endl;
 
 
-            //GSessionManager.Broadcast( session->)
+            //g_SessionManager.Broadcast( session->)
             PacketHandler::Handle_C2S_CHAT(session, header);
        
 
@@ -52,7 +52,7 @@ void ProcessPacket(Session* session, PacketHeader* header) {
             //std::cout << "패킷 처리 중... ID: " << header->id << ", Size: " << header->size << std::endl;
 
 
-            //GSessionManager.Broadcast( session->)
+            //g_SessionManager.Broadcast( session->)
             PacketHandler::Handle_C2S_MOVE(session, header);
 
 

@@ -64,7 +64,7 @@ void PacketHandler::Handle_C2S_CHAT(Session* session, PacketHeader* header) {
     memcpy(sendOv->buffer + sizeof(PacketHeader), chatMsg, payloadSize);
 
     // 3. 모든 사람에게 전송
-    GSessionManager.Broadcast(sendOv);
+    g_SessionManager.Broadcast(sendOv);
 }
 
 void PacketHandler::Handle_C2S_MOVE(Session* session, PacketHeader* header)
@@ -74,8 +74,8 @@ void PacketHandler::Handle_C2S_MOVE(Session* session, PacketHeader* header)
     C2S_MovePacket* pkt = reinterpret_cast<C2S_MovePacket*>(header);
 
     // 2. 서버 내 유저 정보 갱신 (보통 여기서 이동이 가능한 지형인지 검증 로직이 들어감)
-    session->x = pkt->x;
-    session->y = pkt->y;
+    session->x = static_cast<int32_t>(pkt->x);
+    session->y = static_cast<int32_t>(pkt->y);
    // session->yaw = pkt->yaw;
 
     // 3. 주변 유저에게 알림 (지금은 전체 유저에게 브로드캐스트)
@@ -94,7 +94,7 @@ void PacketHandler::Handle_C2S_MOVE(Session* session, PacketHeader* header)
    // resPkt->yaw = session->yaw;
 
     // 모든 사람에게 전송 (나 자신을 포함해도 되고 제외해도 되지만, 보통 확인을 위해 포함)
-    GSessionManager.Broadcast(sendOv);
+    g_SessionManager.Broadcast(sendOv);
 
 
 }
@@ -119,11 +119,11 @@ void PacketHandler::Handle_C2S_ENTER(Session* session, PacketHeader* header) {
     session->isAuth = true; // 인증 완료 플래그
 
     // 2. 이 세션을 '활성 목록'에 추가 (Broadcasting 대상이 됨)
-   // GSessionManager.AddActiveSession(session);
+   // g_SessionManager.AddActiveSession(session);
 
     // 3. ★ 여기서 호출!
     // 주변 유저들에게 "나 들어왔어!"라고 알림
-    GSessionManager.BroadcastNewUser(session);
+    g_SessionManager.BroadcastNewUser(session);
 
     // 4. 본인에게는 성공 응답 패킷 전송
     // Send_S2C_EnterGameOk(session);
@@ -144,8 +144,8 @@ void PacketHandler::Handle_C2S_TARGET_MOVE(Session* session, PacketHeader* heade
     C2S_TargetMovePacket* pkt = reinterpret_cast<C2S_TargetMovePacket*>(header);
 
     // 2. 서버 내 유저 정보 갱신 (보통 여기서 이동이 가능한 지형인지 검증 로직이 들어감)
-    int _targetX = pkt->x;
-    int _targetY = pkt->y;
+    int _targetX = static_cast<int32_t>(pkt->x);
+    int _targetY = static_cast<int32_t>(pkt->y);
 
     Pos start = { (int)session->x ,  (int)session->y };
     Pos dest = { _targetX, _targetY };
@@ -154,7 +154,17 @@ void PacketHandler::Handle_C2S_TARGET_MOVE(Session* session, PacketHeader* heade
 
     if (!newPath.empty()) {
         std::lock_guard<std::mutex> lock(session->moveMutex);
+
         session->pathQueue = std::move(newPath); // 세션에 경로 저장
         session->isMoving = true;
+        session->moveTimer = 0.0f;
     }
+    else
+    {
+        // [중요] 길찾기 실패 시 처리
+        std::lock_guard<std::mutex> lock(session->moveMutex);
+        session->pathQueue.clear();
+        session->isMoving = false;
+    }
+    
 }

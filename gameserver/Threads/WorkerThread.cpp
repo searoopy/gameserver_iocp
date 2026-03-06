@@ -40,7 +40,7 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
             setsockopt(ovEx->sessionSocket, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, (char*)&listenSocket, sizeof(SOCKET));
             OptimizeSocketBuffer(ovEx->sessionSocket);
 
-            Session* newSession = GSessionManager.Acquire();
+            Session* newSession = g_SessionManager.Acquire();
             if (newSession == nullptr) {
                 closesocket(ovEx->sessionSocket);
                 GMemoryPool->Push(ovEx);

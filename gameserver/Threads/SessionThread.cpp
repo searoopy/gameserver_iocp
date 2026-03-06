@@ -25,14 +25,14 @@ void SessionThread()
         lastTick = currentTick;
 
         // 모든 세션의 이동 및 로직 업데이트
-        GSessionManager.UpdateSssionMovement(deltaTime);
+        g_SessionManager.UpdateSssionMovement(deltaTime);
 
 
         //일 정 주기마다 위치 패킷 전송.
         // 2. 일정 주기마다만 위치 패킷 전송
         syncTimer += deltaTime;
         if (syncTimer >= syncInterval) {
-            GSessionManager.BroadcastAllLocations(); // 이동 중인 유저들의 좌표를 모아서 전송
+            g_SessionManager.BroadcastAllLocations(); // 이동 중인 유저들의 좌표를 모아서 전송
             syncTimer = 0.0f;
         }
 

@@ -4,7 +4,7 @@
 #include "..\PROTOCOL\Protocol.h"
 #include "..\Monster\Monster.h"
 
-SessionManager GSessionManager;
+SessionManager g_SessionManager;
 
 
 void SessionManager::Broadcast(OverlappedEx* sendOv) {
@@ -150,7 +150,7 @@ void SessionManager::BroadcastMonsterMove(Monster* monster)
 
     for (Session* target : targets) {
         // 세션 유효성 체크
-        if (target->isFree.load() || target->socket == INVALID_SOCKET)
+        if (target->isFree.load() || target->socket == INVALID_SOCKET || target->isAuth == false )
             continue;
 
         // [핵심] 거리 체크 (피타고라스 정리)
@@ -158,6 +158,9 @@ void SessionManager::BroadcastMonsterMove(Monster* monster)
         float diffY = pkt.y - target->y;
         float distSq = (diffX * diffX) + (diffY * diffY);
 
+
+
+        //근처 플레이어에게만 보냄.
         if (distSq <= VIEW_RANGE * VIEW_RANGE) {
             // 전송용 OverlappedEx 할당
             OverlappedEx* sendOv = GMemoryPool->Pop();
@@ -235,6 +238,7 @@ void SessionManager::UpdateSssionMovement(float deltaTime)
 
             // 실제 좌표 계산 로직 수행
             ProcessMovement(target, deltaTime);
+
         }
 
     }
@@ -261,22 +265,54 @@ void SessionManager::ProcessMovement(Session* session, float deltaTime)
 
     // 4. 시간이 충족되면 실제 타일 좌표 변경
     if (session->moveTimer >= timePerTile) {
+        
+
+
         Pos nextTile = session->pathQueue.front();
 
-        // 정수 좌표 업데이트
-        session->x = nextTile.x;
-        session->y = nextTile.y;
+        if (nextTile.x == session->x && nextTile.y == session->y) {
+            if (!session->pathQueue.empty())
+            {
+                session->pathQueue.pop_front();
+                return; 
+            }
+        }
 
-        // 데이터 소비
-        session->pathQueue.pop_front();
 
         // 타이머 차감 (남은 시간을 이월시켜 프레임 드랍 보정)
         session->moveTimer -= timePerTile;
 
-        // 목적지 도달 시 종료 처리
-        if (session->pathQueue.empty()) {
-            session->isMoving = false;
+        //이 위치에 갈수 있는지 검사.
+        if (g_tileMgr.IsOccupied(nextTile.x, nextTile.y) == false)
+        {
+            g_tileMgr.SetOccupied(session->x, session->y, ENUM_TILE_NAME::empty);
+
+
+            // 정수 좌표 업데이트
+            session->x = nextTile.x;
+            session->y = nextTile.y;
+
+
+            g_tileMgr.SetOccupied(session->x, session->y, ENUM_TILE_NAME::player);
+
+
+            // 데이터 소비
+            session->pathQueue.pop_front();
+
+           
+
+            // 목적지 도달 시 종료 처리
+            if (session->pathQueue.empty()) {
+                session->isMoving = false;
+                session->moveTimer = 0.0f;
+            }
+
+        }
+        else //갈수 없으면 이동 실패 처리가 이동 큐 비워줌.
+        {
+           session->isMoving = false;
             session->moveTimer = 0.0f;
+            session->pathQueue.clear();
         }
 
         // [중요] 타일이 바뀌었을 때만 클라이언트에 브로드캐스트를 유도할 수 있음
@@ -363,6 +399,9 @@ void HandleDisconnect(Session* session) {
     // 2. 퇴장 알림을 위한 UID 백업 (세션이 초기화되기 전에 수행)
     int32_t backupUid = session->userUid;
 
+    // 타일 설정
+    g_tileMgr.SetOccupied(session->x, session->y, ENUM_TILE_NAME::empty);
+
     // 3. 소켓 닫기 (커널 신호 차단)
     if (session->socket != INVALID_SOCKET) {
         closesocket(session->socket);
@@ -371,11 +410,11 @@ void HandleDisconnect(Session* session) {
 
     // 4. 활성 목록 제거 및 스택 반납
     // 내부에서 swap-back(O(1))으로 제거되고 프리 스택으로 들어갑니다.
-    GSessionManager.Release(session);
+    g_SessionManager.Release(session);
 
     // 5. [핵심] 다른 유저들에게 퇴장 알림 전송
     // Release 이후에 호출하여 목록 정리가 끝났음을 보장합니다.
     if (backupUid != -1) {
-        GSessionManager.BroadcastLeaveUser(backupUid);
+        g_SessionManager.BroadcastLeaveUser(backupUid);
     }
 }

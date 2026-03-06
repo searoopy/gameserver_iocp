@@ -16,23 +16,30 @@ class Monster
 {
 public:
 	Monster(int32_t id)
-		:monsterId(id), hp(100), state(MONSTER_STATE::IDLE)
+		:monsterId(id), hp(100), state(MONSTER_STATE::IDLE),
+		moveTimer(0.0f) , speed(1)
 	{
 		pos.x = 0; pos.y = 0;
+		
 	}
 
 
 public:
 	int32_t monsterId;
 	std::atomic<int32_t> hp;
+	float moveTimer;
+	float speed;
 
 	struct {
-		std::atomic<float> x;
-		std::atomic<float> y;
+		std::atomic<int32_t> x;
+		std::atomic<int32_t> y;
 	} pos;
 
 
 	MONSTER_STATE state;
 	std::mutex m_lock;
+
+
+
 
 };
