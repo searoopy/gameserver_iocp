@@ -38,7 +38,7 @@ struct Session {
 	float moveTimer = 0.0f;
 	std::deque<Pos> pathQueue;
 	float speed = 20.0f;
-
+	bool bPosChanged = false;
 
 	//send용 변수들.
 	std::mutex sendMutex;

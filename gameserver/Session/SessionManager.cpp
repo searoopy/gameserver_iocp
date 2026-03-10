@@ -3,6 +3,7 @@
 #include "..\Common.h"
 #include "..\PROTOCOL\Protocol.h"
 #include "..\Monster\Monster.h"
+#include "..\Monster\MonsterMgr.h"
 
 SessionManager g_SessionManager;
 
@@ -146,7 +147,7 @@ void SessionManager::BroadcastMonsterMove(Monster* monster)
     std::vector<Session*> targets = GetSessionsSnapshot();
 
     // 3. 거리 기반 필터링 및 전송
-    const float VIEW_RANGE = 1000.0f; // 몬스터를 볼 수 있는 거리 (픽셀 단위)
+    const float VIEW_RANGE = 100000.0f; // 몬스터를 볼 수 있는 거리 (픽셀 단위)
 
     for (Session* target : targets) {
         // 세션 유효성 체크
@@ -176,14 +177,21 @@ void SessionManager::BroadcastMonsterMove(Monster* monster)
     }
 
 }
+
+
+/*
 void SessionManager::BroadcastAllLocations()
 {
     std::vector<PlayerPosInfo> movingPlayers;
     std::vector<Session*> targets = GetSessionsSnapshot();
 
     for (Session* s : targets) {
-        if (s->isMoving) {
+        //if (s->isMoving) {
+        if (s->bPosChanged) {
+           
             movingPlayers.push_back({ s->userUid, s->x, s->y });
+            s->bPosChanged = false;
+
         }
     }
 
@@ -216,6 +224,88 @@ void SessionManager::BroadcastAllLocations()
         }
     }
 }
+*/
+void SessionManager::BroadcastAllLocations() {
+    std::vector<PlayerPosInfo> movingPlayers;
+    auto targets = GetSessionsSnapshot();
+
+    for (Session* s : targets) {
+        if (s->bPosChanged) {
+            movingPlayers.push_back({ s->userUid, s->x, s->y });
+            s->bPosChanged = false;
+        }
+    }
+    if (movingPlayers.empty()) return;
+
+    const int MAX_PLAYERS_PER_PACKET = 300;
+    int totalMoving = static_cast<int>(movingPlayers.size());
+
+    for (int i = 0; i < totalMoving; i += MAX_PLAYERS_PER_PACKET) {
+        int countToSend = min(MAX_PLAYERS_PER_PACKET, totalMoving - i);
+        uint16_t packetSize = sizeof(S2C_AllLocationPacket) + (sizeof(PlayerPosInfo) * countToSend);
+
+        // [핵심] 이번 묶음을 보낼 공용 패킷 하나 생성
+        OverlappedEx* sharedOv = GMemoryPool->Pop();
+        sharedOv->Init();
+        sharedOv->type = IO_TYPE::SEND;
+
+        // 패킷 데이터 채우기
+        S2C_AllLocationPacket* pkt = reinterpret_cast<S2C_AllLocationPacket*>(sharedOv->buffer);
+        pkt->header.size = packetSize;
+        pkt->header.id = static_cast<uint16_t>(Packet_S2C::ALL_LOCATE);
+        pkt->playerCount = static_cast<uint16_t>(countToSend);
+        memcpy(sharedOv->buffer + sizeof(S2C_AllLocationPacket), &movingPlayers[i], sizeof(PlayerPosInfo) * countToSend);
+
+        // 1. 전송 대상 리스트업
+        std::vector<Session*> validTargets;
+        for (Session* target : targets) {
+            if (target->isFree.load() || target->socket == INVALID_SOCKET) continue;
+            validTargets.push_back(target);
+        }
+
+        // 2. 참조 카운트를 대상 인원수만큼 설정
+        sharedOv->refCount.store((int32_t)validTargets.size());
+
+        // 3. 각 세션에 전달
+        for (Session* target : validTargets) {
+            SendPacket(target, sharedOv);
+        }
+    }
+}
+
+
+
+void SessionManager::SendInitialMonsterLocations(Session* target)
+{
+    auto& monsters = g_MonsterManager.GetMonsters();
+    if (monsters.empty()) return;
+
+    // 몬스터 위치 정보를 담을 벡터
+    std::vector<PlayerPosInfo> monsterInfos;
+    for (Monster* m : monsters) {
+        if (m->hp > 0) {
+            // UID를 몬스터용으로 구분해서 사용 (예: 10000번 이상)
+            monsterInfos.push_back({ m->monsterId, m->pos.x, m->pos.y });
+        }
+    }
+
+    // 패킷 분할 전송 (인원이 많을 경우 대비)
+    const int MAX_PER_PACKET = 300;
+    for (size_t i = 0; i < monsterInfos.size(); i += MAX_PER_PACKET) {
+        int count = std::min<int>(MAX_PER_PACKET, (int)monsterInfos.size() - i);
+
+        OverlappedEx* sendOv = GMemoryPool->Pop();
+        S2C_AllLocationPacket* pkt = reinterpret_cast<S2C_AllLocationPacket*>(sendOv->buffer);
+
+        pkt->header.id = static_cast<uint16_t>(Packet_S2C::MONSTER_SPAWN); // 몬스터 스폰용 ID
+        pkt->header.size = sizeof(S2C_AllLocationPacket) + (sizeof(PlayerPosInfo) * count);
+        pkt->playerCount = count;
+
+        memcpy(sendOv->buffer + sizeof(S2C_AllLocationPacket), &monsterInfos[i], sizeof(PlayerPosInfo) * count);
+
+        SendPacket(target, sendOv);
+    }
+}
 
 
 
@@ -240,18 +330,14 @@ void SessionManager::UpdateSssionMovement(float deltaTime)
             ProcessMovement(target, deltaTime);
 
         }
-
     }
-
-
-
 }
 
 void SessionManager::ProcessMovement(Session* session, float deltaTime)
 {
 
     // 1. 목적지가 없으면 이동 종료
-    if (session->pathQueue.empty()) {
+    if (!session->isMoving || session->pathQueue.empty()) {
         session->isMoving = false;
         session->moveTimer = 0.0f;
         return;
@@ -263,128 +349,219 @@ void SessionManager::ProcessMovement(Session* session, float deltaTime)
     // 3. 한 칸 이동에 필요한 시간 계산 (예: speed가 5면 0.2초)
     float timePerTile = 1.0f / session->speed;
 
-    // 4. 시간이 충족되면 실제 타일 좌표 변경
-    if (session->moveTimer >= timePerTile) {
-        
-
+    while (session->moveTimer >= timePerTile) {
+        if (session->pathQueue.empty()) break;
 
         Pos nextTile = session->pathQueue.front();
 
+        // 1. 현재 위치와 같은 좌표가 큐에 들어있다면 즉시 제거하고 계속 진행
         if (nextTile.x == session->x && nextTile.y == session->y) {
-            if (!session->pathQueue.empty())
-            {
-                session->pathQueue.pop_front();
-                return; 
+            session->pathQueue.pop_front();
+            if (session->pathQueue.empty()) {
+                session->isMoving = false;
+                break;
             }
+            // pop만 하고 continue하면 다음 루프에서 바로 다음 칸 이동 시도
+            continue;
         }
 
-
-        // 타이머 차감 (남은 시간을 이월시켜 프레임 드랍 보정)
+        // 2. 타이머 차감 및 실제 이동 시도
         session->moveTimer -= timePerTile;
 
-        //이 위치에 갈수 있는지 검사.
-        if (g_tileMgr.IsOccupied(nextTile.x, nextTile.y) == false)
-        {
-            g_tileMgr.SetOccupied(session->x, session->y, ENUM_TILE_NAME::empty);
-
-
-            // 정수 좌표 업데이트
+        if (g_pTileMgr->TryOccupy(nextTile.x, nextTile.y, ENUM_TILE_NAME::player)) {
+            g_pTileMgr->SetOccupied(session->x, session->y, ENUM_TILE_NAME::empty);
             session->x = nextTile.x;
             session->y = nextTile.y;
 
 
-            g_tileMgr.SetOccupied(session->x, session->y, ENUM_TILE_NAME::player);
+            // [중요] 좌표가 변했음을 마킹 (이동 종료 여부와 상관없이!)
+            session->bPosChanged = true;
 
 
-            // 데이터 소비
             session->pathQueue.pop_front();
 
-           
-
-            // 목적지 도달 시 종료 처리
             if (session->pathQueue.empty()) {
                 session->isMoving = false;
                 session->moveTimer = 0.0f;
             }
-
+           // session->bPosChanged = true; // 이동 성공 플래그
+            break; // 한 프레임에 한 칸씩만 이동하려면 break
         }
-        else //갈수 없으면 이동 실패 처리가 이동 큐 비워줌.
-        {
-           session->isMoving = false;
-            session->moveTimer = 0.0f;
+        else {
+            // 길막 처리
+            session->isMoving = false;
             session->pathQueue.clear();
+            session->moveTimer = 0.0f;
+
+            session->bPosChanged = true; // 멈춘 위치라도 동기화하기 위해 설정
+            break;
         }
-
-        // [중요] 타일이 바뀌었을 때만 클라이언트에 브로드캐스트를 유도할 수 있음
-        //브로드 캐스트는 세션 스레드에서 일괄적으로 함.
-
-
-
     }
 
 
 }
 
 
+//void SendPacket(Session* session, OverlappedEx* sendOv) {
+//    bool failed = false;
+//    bool initiateSend = false;
+//
+//    // Gather 전송을 위한 준비
+//    WSABUF wsaBufs[WSA_BUFF_CNT];
+//    int bufCount = 0;
+//    OverlappedEx* firstTarget = nullptr;
+//
+//    {
+//        std::lock_guard<std::mutex> lock(session->sendMutex);
+//
+//        if (session->isFree.load() || session->socket == INVALID_SOCKET) {
+//            GMemoryPool->Push(sendOv);
+//            return;
+//        }
+//
+//        // 1. 일단 큐에 넣기
+//        session->sendQueue.push_back(sendOv);
+//
+//        // 2. 현재 전송 중이 아니라면, 큐에 쌓인 것들을 최대한 긁어서 전송 시작
+//        if (!session->isSending) {
+//            session->isSending = true;
+//            initiateSend = true;
+//
+//            // 큐에 있는 패킷들을 최대 WSA_BUFF_CNT(32)개까지 Gather
+//            for (auto* ov : session->sendQueue) {
+//                if (bufCount >= WSA_BUFF_CNT) break;
+//
+//                wsaBufs[bufCount].buf = ov->buffer;
+//                wsaBufs[bufCount].len = reinterpret_cast<PacketHeader*>(ov->buffer)->size;
+//
+//                if (bufCount == 0) firstTarget = ov;
+//                bufCount++;
+//            }
+//
+//            // [중요] 이번 전송에 포함된 패킷 개수를 기록!
+//            session->sendPendingCount = bufCount;
+//        }
+//    }
+//
+//    // 3. 락 밖에서 전송 호출
+//    if (initiateSend && firstTarget) {
+//        DWORD sentBytes = 0;
+//        // bufCount 만큼의 배열을 한 번에 보냄
+//        if (WSASend(session->socket, wsaBufs, bufCount, &sentBytes, 0, (LPOVERLAPPED)firstTarget, NULL) == SOCKET_ERROR) {
+//            int errCode = WSAGetLastError();
+//            if (errCode != ERROR_IO_PENDING) {
+//                {
+//                    std::lock_guard<std::mutex> lock(session->sendMutex);
+//                    session->isSending = false;
+//                    session->sendPendingCount = 0; // 실패했으므로 카운트 리셋
+//                }
+//                failed = true;
+//                // HandleDisconnect(session); // 필요 시 호출
+//            }
+//        }
+//    }
+//}
+
+
+/*
 void SendPacket(Session* session, OverlappedEx* sendOv) {
-    bool failed = false;
+    // 1. 락 구간을 극도로 짧게 가져갑니다.
+    bool expected = false;
     bool initiateSend = false;
 
-    // Gather 전송을 위한 준비
+    {
+        std::lock_guard<std::mutex> lock(session->sendMutex);
+        if (session->isFree || session->socket == INVALID_SOCKET) {
+            GMemoryPool->Push(sendOv);
+            return;
+        }
+
+        session->sendQueue.push_back(sendOv);
+
+        // 전송 중이 아닐 때만 '딱 한 번' 플래그를 세웁니다.
+        if (!session->isSending) {
+            session->isSending = true;
+            initiateSend = true;
+        }
+    }
+
+    // 2. 만약 내가 전송 시작 권한을 얻었다면, 락 밖에서 큐를 훑습니다.
+    if (initiateSend) {
+        WSABUF wsaBufs[WSA_BUFF_CNT];
+        int bufCount = 0;
+        OverlappedEx* firstTarget = nullptr;
+
+        // 락을 다시 잡되, 이번에는 전송에 필요한 정보만 '복사'해옵니다.
+        {
+            std::lock_guard<std::mutex> lock(session->sendMutex);
+            for (auto* ov : session->sendQueue) {
+                if (bufCount >= WSA_BUFF_CNT) break;
+                wsaBufs[bufCount].buf = ov->buffer;
+                wsaBufs[bufCount].len = reinterpret_cast<PacketHeader*>(ov->buffer)->size;
+                if (bufCount == 0) firstTarget = ov;
+                bufCount++;
+            }
+            session->sendPendingCount = bufCount;
+        }
+
+        if (firstTarget) {
+            DWORD sentBytes = 0;
+            if (WSASend(session->socket, wsaBufs, bufCount, &sentBytes, 0, (LPOVERLAPPED)firstTarget, NULL) == SOCKET_ERROR) {
+                if (WSAGetLastError() != ERROR_IO_PENDING) {
+                    std::lock_guard<std::mutex> lock(session->sendMutex);
+                    session->isSending = false;
+                    session->sendPendingCount = 0;
+                }
+            }
+        }
+    }
+}
+*/
+
+void SendPacket(Session* session, OverlappedEx* sendOv) {
+    bool initiateSend = false;
     WSABUF wsaBufs[WSA_BUFF_CNT];
     int bufCount = 0;
     OverlappedEx* firstTarget = nullptr;
 
     {
         std::lock_guard<std::mutex> lock(session->sendMutex);
-
         if (session->isFree.load() || session->socket == INVALID_SOCKET) {
-            GMemoryPool->Push(sendOv);
+            // 대상이 유효하지 않으면 카운트 깎고 0이면 반납
+            if (sendOv->refCount.fetch_sub(1) == 1) GMemoryPool->Push(sendOv);
             return;
         }
 
-        // 1. 일단 큐에 넣기
         session->sendQueue.push_back(sendOv);
 
-        // 2. 현재 전송 중이 아니라면, 큐에 쌓인 것들을 최대한 긁어서 전송 시작
         if (!session->isSending) {
             session->isSending = true;
             initiateSend = true;
 
-            // 큐에 있는 패킷들을 최대 WSA_BUFF_CNT(32)개까지 Gather
             for (auto* ov : session->sendQueue) {
                 if (bufCount >= WSA_BUFF_CNT) break;
-
                 wsaBufs[bufCount].buf = ov->buffer;
                 wsaBufs[bufCount].len = reinterpret_cast<PacketHeader*>(ov->buffer)->size;
-
                 if (bufCount == 0) firstTarget = ov;
                 bufCount++;
             }
-
-            // [중요] 이번 전송에 포함된 패킷 개수를 기록!
             session->sendPendingCount = bufCount;
         }
     }
 
-    // 3. 락 밖에서 전송 호출
     if (initiateSend && firstTarget) {
         DWORD sentBytes = 0;
-        // bufCount 만큼의 배열을 한 번에 보냄
         if (WSASend(session->socket, wsaBufs, bufCount, &sentBytes, 0, (LPOVERLAPPED)firstTarget, NULL) == SOCKET_ERROR) {
-            int errCode = WSAGetLastError();
-            if (errCode != ERROR_IO_PENDING) {
-                {
-                    std::lock_guard<std::mutex> lock(session->sendMutex);
-                    session->isSending = false;
-                    session->sendPendingCount = 0; // 실패했으므로 카운트 리셋
-                }
-                failed = true;
-                // HandleDisconnect(session); // 필요 시 호출
+            if (WSAGetLastError() != ERROR_IO_PENDING) {
+                std::lock_guard<std::mutex> lock(session->sendMutex);
+                session->isSending = false;
+                // 실패한 만큼 참조 카운트 복구/반납 로직이 필요할 수 있으나 보통 세션 종료 처리
+                session->sendPendingCount = 0;
             }
         }
     }
 }
+
 
 
 void HandleDisconnect(Session* session) {
@@ -400,13 +577,39 @@ void HandleDisconnect(Session* session) {
     int32_t backupUid = session->userUid;
 
     // 타일 설정
-    g_tileMgr.SetOccupied(session->x, session->y, ENUM_TILE_NAME::empty);
+
+    if (session->isAuth) {
+        g_pTileMgr->SetOccupied(session->x, session->y, ENUM_TILE_NAME::empty);
+
+        // 이동 중이었다면 상태 초기화 (다른 쓰레드 참조 방지)
+        session->isMoving = false;
+        session->pathQueue.clear();
+    }
+  
 
     // 3. 소켓 닫기 (커널 신호 차단)
     if (session->socket != INVALID_SOCKET) {
         closesocket(session->socket);
         session->socket = INVALID_SOCKET;
     }
+
+
+    // [추가] 3.5단계: 남아있는 전송 큐 정리
+    {
+        std::lock_guard<std::mutex> lock(session->sendMutex);
+        while (!session->sendQueue.empty()) {
+            OverlappedEx* ov = session->sendQueue.front();
+            session->sendQueue.pop_front();
+
+            // 참조 카운트를 깎고 마지막이면 반납
+            if (ov->refCount.fetch_sub(1) == 1) {
+                GMemoryPool->Push(ov);
+            }
+        }
+        session->isSending = false;
+        session->sendPendingCount = 0;
+    }
+
 
     // 4. 활성 목록 제거 및 스택 반납
     // 내부에서 swap-back(O(1))으로 제거되고 프리 스택으로 들어갑니다.

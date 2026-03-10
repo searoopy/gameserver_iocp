@@ -86,7 +86,7 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
                 if (header->size < sizeof(PacketHeader) || header->size > 1024 * 10) { // 매직 넘버 방어
                     HandleDisconnect(session);
                     GMemoryPool->Push(ovEx);
-                    return;
+                    break; // return;
                 }
 
                 if (session->GetDataSize() < header->size) break;
@@ -112,6 +112,7 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
 
         case IO_TYPE::SEND:
         {
+            /*
             Session* session = reinterpret_cast<Session*>(completionKey);
             std::vector<OverlappedEx*> finishedList;
             WSABUF wsaBufs[WSA_BUFF_CNT];
@@ -164,6 +165,95 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
                 }
             }
             break;
+
+
+            */
+
+            Session* session = reinterpret_cast<Session*>(completionKey);
+            std::vector<OverlappedEx*> toRelease;
+            toRelease.reserve(WSA_BUFF_CNT);
+
+
+            // 1. 다음 전송을 위한 준비물
+            WSABUF wsaBufs[WSA_BUFF_CNT];
+            int bufCount = 0;
+            OverlappedEx* firstTarget = nullptr;
+            bool initiateNextSend = false;
+
+            {
+                std::lock_guard<std::mutex> lock(session->sendMutex);
+
+
+                // 세션이 이미 종료되었거나 큐가 비어있다면 무시 (중요!)
+                if (session->isFree.load() || session->sendQueue.empty()) {
+                    session->sendPendingCount = 0;
+                    session->isSending = false;
+                    // 여기서 return 하지 말고 밖에서 toRelease 정리만 하고 끝내야 함
+                }
+                else
+                {
+
+                    // --- [A] 방금 완료된 패킷들 정리 ---
+                    int completedCount = session->sendPendingCount;
+                    for (int i = 0; i < completedCount; ++i) {
+                        if (session->sendQueue.empty()) break;
+                        OverlappedEx* completed = session->sendQueue.front();
+                        session->sendQueue.pop_front();
+
+                        if (completed->refCount.fetch_sub(1) == 1) {
+                            toRelease.push_back(completed);
+                        }
+                    }
+                    session->sendPendingCount = 0;
+
+                    // --- [B] 남은 패킷이 있다면 다음 전송 시작 (핵심) ---
+                    if (session->sendQueue.empty()) {
+                        session->isSending = false;
+                    }
+                    else {
+                        // 아직 보낼 게 남았다면 다시 Gather
+                        initiateNextSend = true;
+
+                        auto it = session->sendQueue.begin();
+                        for (; it != session->sendQueue.end() && bufCount < WSA_BUFF_CNT; ++it) {
+                            OverlappedEx* ov = *it;
+                            wsaBufs[bufCount].buf = ov->buffer;
+                            wsaBufs[bufCount].len = reinterpret_cast<PacketHeader*>(ov->buffer)->size;
+
+                            if (bufCount == 0) firstTarget = ov;
+                            bufCount++;
+                        }
+                        session->sendPendingCount = bufCount;
+                    }
+                }
+            }
+
+            // --- [C] 락 밖에서 메모리 반납 및 다음 전송 호출 ---
+            for (auto* ov : toRelease) GMemoryPool->Push(ov);
+
+            if (initiateNextSend && firstTarget) {
+                SOCKET s = session->socket;
+                if (s != INVALID_SOCKET)
+                {
+                    DWORD sentBytes = 0;
+                    if (WSASend(session->socket, wsaBufs, bufCount, &sentBytes, 0, (LPOVERLAPPED)firstTarget, NULL) == SOCKET_ERROR)
+                    {
+                        if (WSAGetLastError() != ERROR_IO_PENDING)
+                        {
+                            // 전송 실패 시 처리
+                            std::lock_guard<std::mutex> lock(session->sendMutex);
+                            session->isSending = false;
+                            session->sendPendingCount = 0;
+                        }
+                    }
+                }
+            }
+            break;
+
+
+
+
+
         }//send...
 
 

@@ -1,5 +1,6 @@
 #include "Common.h"
 #include "MemoryPool.h"
+#include "Debug.h"
 
 LPFN_ACCEPTEX lpfnAcceptEx = NULL; // 함수 포인터 저장용
 
@@ -48,12 +49,14 @@ void OptimizeSocketBuffer(SOCKET socket) {
 
 	// 수신 버퍼 크기 설정
 	if (setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char*)&bufferSize, sizeof(bufferSize)) == SOCKET_ERROR) {
-		std::cerr << "RCVBUF 설정 실패: " << WSAGetLastError() << std::endl;
+		//std::cerr << "RCVBUF 설정 실패: " << WSAGetLastError() << std::endl;
+		LOG("recvbuf 설정실패....");
 	}
 
 	// 송신 버퍼 크기 설정
 	if (setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char*)&bufferSize, sizeof(bufferSize)) == SOCKET_ERROR) {
-		std::cerr << "SNDBUF 설정 실패: " << WSAGetLastError() << std::endl;
+		//std::cerr << "SNDBUF 설정 실패: " << WSAGetLastError() << std::endl;
+		LOG("sndbuf 설정실패....");
 	}
 
 	// [고급] TCP No Delay 설정 (Nagle 알고리즘 끄기)

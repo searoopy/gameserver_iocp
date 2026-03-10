@@ -121,9 +121,13 @@ void PacketHandler::Handle_C2S_ENTER(Session* session, PacketHeader* header) {
     // 2. 이 세션을 '활성 목록'에 추가 (Broadcasting 대상이 됨)
    // g_SessionManager.AddActiveSession(session);
 
-    // 3. ★ 여기서 호출!
+    // 3. 여기서 호출!
     // 주변 유저들에게 "나 들어왔어!"라고 알림
     g_SessionManager.BroadcastNewUser(session);
+
+
+    //몬스터 정보 요청..
+    g_SessionManager.SendInitialMonsterLocations(session);
 
     // 4. 본인에게는 성공 응답 패킷 전송
     // Send_S2C_EnterGameOk(session);
@@ -150,7 +154,7 @@ void PacketHandler::Handle_C2S_TARGET_MOVE(Session* session, PacketHeader* heade
     Pos start = { (int)session->x ,  (int)session->y };
     Pos dest = { _targetX, _targetY };
 
-    std::deque<Pos> newPath = AStar::FindPath(g_tileMgr.GetMap(), start, dest);
+    std::deque<Pos> newPath = AStar::FindPath(g_pTileMgr->GetMap(), start, dest);
 
     if (!newPath.empty()) {
         std::lock_guard<std::mutex> lock(session->moveMutex);

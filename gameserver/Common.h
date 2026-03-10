@@ -35,7 +35,8 @@
 enum class IO_TYPE {
 	ACCEPT,
 	RECV,
-	SEND
+	SEND,
+	NONE,
 };
 
 // Overlapped 구조체를 확장하여 커스텀 데이터 보관
@@ -45,7 +46,24 @@ struct OverlappedEx {
 	SOCKET sessionSocket;    // AcceptEx 시 새로 생성한 소켓 보관용
 	char buffer[MAX_BUFFER_SIZE];       // 데이터 수신용 버퍼
 
+	std::atomic<int32_t> refCount; // 참조 카운트 추가
+
 	OverlappedEx* next = nullptr; // lock -free stack을 위한 링크.
+
+
+
+	OverlappedEx() {
+		memset(&overlapped, 0, sizeof(overlapped));
+		type = IO_TYPE::NONE;
+		refCount = 0;
+	}
+
+	// 재사용을 위한 초기화 함수
+	void Init() {
+		memset(&overlapped, 0, sizeof(overlapped));
+		refCount = 0;
+	}
+
 };
 
 

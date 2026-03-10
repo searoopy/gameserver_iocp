@@ -128,6 +128,9 @@ public:
     void BroadcastLeaveUser(int32_t leavingUser);
     void BroadcastMonsterMove(Monster* monster);
     void BroadcastAllLocations();
+    void SendInitialMonsterLocations(Session* targe);
+
+
 
     void UpdateSssionMovement(float deltaTime);
     void ProcessMovement( Session* session , float deltaTime);

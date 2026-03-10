@@ -32,6 +32,7 @@ enum class Packet_S2C : uint16_t {
 
 
     ALL_LOCATE = 7,
+    MONSTER_SPAWN =8,
 };
 
 

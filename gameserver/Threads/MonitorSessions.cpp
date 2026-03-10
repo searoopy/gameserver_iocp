@@ -29,8 +29,10 @@ void MonitorSessions() {
             // 3. 타임아웃 체크 (30초 이상 무응답)
             if (currentTick - session->lastHeartbeatTick > 30000) {
                 timeoutCount++;
-                std::cout << "[Monitor] 타임아웃 감지! ID: " << session->sessionIdx
-                    << " (Nickname: " << (session->nickname.empty() ? L"Unknown" : session->nickname.c_str()) << ")" << std::endl;
+
+
+                //std::cout << "[Monitor] 타임아웃 감지! ID: " << session->sessionIdx
+               //     << " (Nickname: " << (session->nickname.empty() ? L"Unknown" : session->nickname.c_str()) << ")" << std::endl;
 
                 // 세션 종료 처리 (이미 atomic 처리가 되어있으므로 안전하게 호출 가능)
                 HandleDisconnect(session);
@@ -43,11 +45,13 @@ void MonitorSessions() {
         int totalConnected = g_SessionManager.GetConnectSessionCnt();
 
         // [콘솔 출력]
+
+        
         std::cout << "\n--- [Server Monitor] " << totalConnected << " Users Connected ---" << std::endl;
         if (timeoutCount > 0) std::cout << " > Disconnected by Timeout: " << timeoutCount << std::endl;
         std::cout << " > Active Players (In-Game): " << authUserCount << std::endl;
         std::cout << "-------------------------------------------\n" << std::endl;
-
+        
 
         /*
         // [파일 기록]
