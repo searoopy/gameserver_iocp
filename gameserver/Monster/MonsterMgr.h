@@ -31,4 +31,4 @@ private:
 
 
 
-extern MonsterManager g_MonsterManager;
+extern std::unique_ptr < MonsterManager> g_pMonsterManager;

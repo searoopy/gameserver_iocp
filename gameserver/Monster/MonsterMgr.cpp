@@ -2,7 +2,7 @@
 
 #include "..\Session\SessionManager.h"
 
-MonsterManager g_MonsterManager;
+std::unique_ptr < MonsterManager> g_pMonsterManager;
 
 
 void MonsterManager::CreateMonsters(int count)

@@ -127,13 +127,22 @@ public:
     void BroadcastNewUser(Session* newUser);
     void BroadcastLeaveUser(int32_t leavingUser);
     void BroadcastMonsterMove(Monster* monster);
-    void BroadcastAllLocations();
+    void BroadcastAllLocations();    ///모든 유저에게 전송......
+    void BroadcastMoveToNearby(Session* actor); // 센터 인근 총 9칸에 전송.
+    void BroadcastToSector(Pos sectorIdx, OverlappedEx* sharedOv, int exceptUid);
+
+
     void SendInitialMonsterLocations(Session* targe);
-
-
+    void SendSectorMembers(Session* me, Pos sectorIdx);
+    void SendSectorMembersLeave(Session* me, Pos sectorIdx);
 
     void UpdateSssionMovement(float deltaTime);
     void ProcessMovement( Session* session , float deltaTime);
+    void SyncView(Session* session, Pos oldIdx, Pos newIdx);
+
+
+
+
 
 private:
     std::mutex m_poolMutex;      // 세션 할당/반납용 락

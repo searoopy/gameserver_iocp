@@ -78,6 +78,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)include;$(SolutionDir)Data;$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>Default</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -90,6 +91,7 @@
   <ItemGroup>
     <ClCompile Include="Common.cpp" />
     <ClCompile Include="Debug.cpp" />
+    <ClCompile Include="GROUND_TILE\SECTOR\SectorMgr.cpp" />
     <ClCompile Include="GROUND_TILE\TileMgr.cpp" />
     <ClCompile Include="MemoryPool.cpp" />
     <ClCompile Include="main.cpp" />
@@ -107,11 +109,13 @@
     <ClInclude Include="Common.h" />
     <ClInclude Include="Debug.h" />
     <ClInclude Include="GROUND_TILE\AStar.h" />
+    <ClInclude Include="GROUND_TILE\SECTOR\SectorMgr.h" />
     <ClInclude Include="GROUND_TILE\TileMgr.h" />
     <ClInclude Include="MemoryPool.h" />
     <ClInclude Include="Monster\Monster.h" />
     <ClInclude Include="Monster\MonsterMgr.h" />
     <ClInclude Include="Monster\MonsterThread.h" />
+    <ClInclude Include="PROTOCOL\PACKET.h" />
     <ClInclude Include="PROTOCOL\PacketHandler.h" />
     <ClInclude Include="PROTOCOL\ProcessPacket.h" />
     <ClInclude Include="PROTOCOL\Protocol.h" />

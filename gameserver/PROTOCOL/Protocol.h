@@ -26,13 +26,22 @@ enum class Packet_S2C : uint16_t {
     MOVE_RES = 3, // 유저 이동 정보 전송
     ENTER_USER = 4, //새로운 유저가 입장함.
     LEAVE_USER = 5, ///유저 아웃..
-    
-    
-    MONSTER_MOVE= 6,
+
+
+    MONSTER_MOVE = 6,
 
 
     ALL_LOCATE = 7,
-    MONSTER_SPAWN =8,
+    MONSTER_SPAWN = 8,
+
+    SECTOR_ENTER_PLAYER_LIST = 9,
+    SECTOR_LEAVE_PLAYER_LIST = 10,
+
+    SECTOR_ENTER_PLAYER = 12,
+    SECTOR_LEAVE_PLAYER = 13,
+
+
+
 };
 
 
@@ -119,5 +128,46 @@ struct S2C_AllLocationPacket {
     uint16_t playerCount;
     // 이후 PlayerPosInfo 데이터가 연속해서 붙음
 };
+
+
+
+//////섹터 기반 이동......
+
+// sector 유저 이동.....
+struct PlayerEntryInfo {
+    int32_t userUid;
+    int32_t x, y;
+    float speed;
+    // 필요한 추가 정보 (직업, 외형 등)
+};
+struct S2C_EnterPlayerListPacket {
+    PacketHeader header;
+    uint16_t playerCount;
+    // 이후 PlayerEntryInfo 데이터가 playerCount만큼 붙음
+};
+
+
+struct S2C_LeavePlayerListPacket {
+    PacketHeader header;
+    uint16_t playerCount;
+    // 이후 int32_t userUid 데이터가 playerCount만큼 붙음
+};
+
+
+struct S2C_EnterPlayerPacket
+{
+    PacketHeader header;
+
+    PlayerEntryInfo playerInfo;
+
+};
+
+
+struct S2C_LeavePlayerPacket
+{
+    PacketHeader header;
+    int32_t userUid;
+};
+
 
 #pragma pack(pop)

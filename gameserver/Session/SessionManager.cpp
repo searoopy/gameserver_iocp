@@ -1,9 +1,13 @@
+#include <set>
+
 #include "SessionManager.h"
 #include "Session.h"
 #include "..\Common.h"
 #include "..\PROTOCOL\Protocol.h"
 #include "..\Monster\Monster.h"
 #include "..\Monster\MonsterMgr.h"
+#include "..\GROUND_TILE\SECTOR\SectorMgr.h"
+#include "..\PROTOCOL\PACKET.h"
 
 SessionManager g_SessionManager;
 
@@ -273,11 +277,103 @@ void SessionManager::BroadcastAllLocations() {
     }
 }
 
+void SessionManager::BroadcastMoveToNearby(Session* actor)
+{
+
+    // 1. 현재 유저가 속한 섹터 좌표 구하기
+     Pos currentIdx = g_pSectorMgr->GetSectorIndex(actor->x, actor->y);
+
+    // 2. 이동 패킷 생성 (참조 카운팅 활용)
+    // actor의 최신 좌표(x, y)를 담은 패킷을 하나 만듭니다.
+    OverlappedEx* movePkt = PACKET::CreateMovePacket(actor);
+
+    // 3. 주변 9개 섹터를 순회하며 전송 대상 수집
+    std::vector<Session*> totalTargets;
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            Pos targetIdx = { currentIdx.x + dx, currentIdx.y + dy };
+
+            if (!g_pSectorMgr->IsValidSector(targetIdx.x, targetIdx.y)) continue;
+
+            Sector& sector = g_pSectorMgr->GetSector(targetIdx);
+
+            // 섹터 락을 잡고 유저 포인터들 스냅샷 복사
+            std::lock_guard<std::mutex> lock(sector.sectorMutex);
+            if (sector.sessions.empty()) continue;
+
+            totalTargets.insert(totalTargets.end(), sector.sessions.begin(), sector.sessions.end());
+        }
+    }
+
+    if (totalTargets.empty()) {
+        GMemoryPool->Push(movePkt);
+        return;
+    }
+
+    // 4. 참조 카운트 설정 및 전송
+    // totalTargets.size()만큼 참조 카운트를 설정합니다.
+    movePkt->refCount.store(static_cast<int32_t>(totalTargets.size()));
+
+    for (Session* target : totalTargets) {
+        // 자기 자신에게는 보낼 필요 없음 + 이미 종료된 세션 방어
+        if (target == actor || target->isFree.load() || !target->isAuth) {
+            if (movePkt->refCount.fetch_sub(1) == 1) {
+                GMemoryPool->Push(movePkt);
+            }
+            continue;
+        }
+
+        // 실제 전송 (IOCP)
+        SendPacket(target, movePkt);
+    }
+
+}
+
+void SessionManager::BroadcastToSector(Pos sectorIdx, OverlappedEx* sharedOv, int exceptUid )
+{
+    if (sharedOv == nullptr) return;
+
+    // 1. 해당 섹터 유저 스냅샷 추출
+    std::vector<Session*> targets;
+    {
+        Sector& sector = g_pSectorMgr->GetSector(sectorIdx);
+        std::lock_guard<std::mutex> lock(sector.sectorMutex);
+        if (sector.sessions.empty()) {
+            // 보낼 대상이 없으면 참조 카운트가 0이므로 바로 반납 시도
+            if (sharedOv->refCount.load() == 0) GMemoryPool->Push(sharedOv);
+            return;
+        }
+        targets = sector.sessions;
+    }
+
+    // 2. 참조 카운트 설정
+    // 주의: 이미 다른 섹터 브로드캐스트에서 카운트가 설정되었을 수 있으므로 fetch_add를 사용합니다.
+    int targetCount = static_cast<int>(targets.size());
+    sharedOv->refCount.fetch_add(targetCount);
+
+    // 3. 전송
+    for (Session* target : targets) {
+        // 이미 종료된 세션이거나 인증 전 유저 제외 , 본인 제외 추가.
+        if (target->userUid == exceptUid ||  target->isFree.load() || !target->isAuth || target->socket == INVALID_SOCKET) {
+            // 전송 불가능한 대상은 즉시 카운트 차감
+            if (sharedOv->refCount.fetch_sub(1) == 1) {
+                GMemoryPool->Push(sharedOv);
+            }
+            continue;
+        }
+
+        // 실제 전송 
+        SendPacket(target, sharedOv);
+    }
+
+
+}
+
 
 
 void SessionManager::SendInitialMonsterLocations(Session* target)
 {
-    auto& monsters = g_MonsterManager.GetMonsters();
+    auto& monsters = g_pMonsterManager->GetMonsters();
     if (monsters.empty()) return;
 
     // 몬스터 위치 정보를 담을 벡터
@@ -309,6 +405,106 @@ void SessionManager::SendInitialMonsterLocations(Session* target)
 
 
 
+
+
+
+
+void SessionManager::SendSectorMembers(Session* me, Pos sectorIdx)
+{
+    // 1. 섹터 유저 스냅샷
+    std::vector<Session*> targets;
+    {
+        Sector& sector = g_pSectorMgr->GetSector(sectorIdx);
+        std::lock_guard<std::mutex> lock(sector.sectorMutex);
+        if (sector.sessions.empty()) return;
+        targets = sector.sessions;
+    }
+
+    // 2. 패킷 생성을 위한 임시 버퍼 준비
+    //2. 나에게 보낼 '주변 유저 목록' 취합
+    std::vector<PlayerEntryInfo> playerList;
+    playerList.reserve(targets.size());
+
+    for (Session* other : targets) {
+        if (other == me || other->isFree.load() || !other->isAuth) continue;
+
+      
+        playerList.push_back({ other->userUid, other->x, other->y, other->speed });
+     
+    }
+
+    if (playerList.empty()) return;
+
+    // 3. 리스트를 패킷에 실어서 전송
+    // (한 번에 다 보내기 너무 크면 MAX_PLAYERS_PER_PACKET으로 끊어서 전송 가능)
+    OverlappedEx* sendOv = GMemoryPool->Pop();
+    sendOv->Init();
+    sendOv->type = IO_TYPE::SEND;
+    sendOv->refCount.store(1); // 나에게만 보내는 것이므로 1
+
+    uint16_t listSize = static_cast<uint16_t>(playerList.size());
+    uint16_t totalSize = sizeof(S2C_EnterPlayerListPacket) + (sizeof(PlayerEntryInfo) * listSize);
+
+    S2C_EnterPlayerListPacket* pkt = reinterpret_cast<S2C_EnterPlayerListPacket*>(sendOv->buffer);
+    pkt->header.id = static_cast<uint16_t>(Packet_S2C::SECTOR_ENTER_PLAYER_LIST);
+    pkt->header.size = totalSize;
+    pkt->playerCount = listSize;
+
+    // 헤더 뒤에 리스트 데이터 복사
+    memcpy(sendOv->buffer + sizeof(S2C_EnterPlayerListPacket),
+        playerList.data(),
+        sizeof(PlayerEntryInfo) * listSize);
+
+    SendPacket(me, sendOv);
+}
+
+void SessionManager::SendSectorMembersLeave(Session* me, Pos sectorIdx)
+{
+    // 1. 해당 섹터 유저 스냅샷 추출
+    std::vector<Session*> targets;
+    {
+        Sector& sector = g_pSectorMgr->GetSector(sectorIdx);
+        std::lock_guard<std::mutex> lock(sector.sectorMutex);
+        if (sector.sessions.empty()) return;
+        targets = sector.sessions;
+    }
+
+    // 2. 삭제할 UID 리스트 수집
+    std::vector<int32_t> leaveUids;
+    leaveUids.reserve(targets.size());
+
+    for (Session* other : targets) {
+        if (other == me || other->isFree.load()) continue;
+        leaveUids.push_back(other->userUid);
+    }
+
+    if (leaveUids.empty()) return;
+
+    // 3. 패킷 생성 및 전송 (참조 카운트 1)
+    OverlappedEx* sendOv = GMemoryPool->Pop();
+    sendOv->Init();
+    sendOv->type = IO_TYPE::SEND;
+    sendOv->refCount.store(1);
+
+    uint16_t listSize = static_cast<uint16_t>(leaveUids.size());
+    uint16_t totalSize = sizeof(S2C_LeavePlayerListPacket) + (sizeof(int32_t) * listSize);
+
+    S2C_LeavePlayerListPacket* pkt = reinterpret_cast<S2C_LeavePlayerListPacket*>(sendOv->buffer);
+    pkt->header.id = static_cast<uint16_t>(Packet_S2C::SECTOR_LEAVE_PLAYER_LIST);
+    pkt->header.size = totalSize;
+    pkt->playerCount = listSize;
+
+    // 데이터 복사 (헤더 바로 뒤에 UID 배열 배치)
+    memcpy(sendOv->buffer + sizeof(S2C_LeavePlayerListPacket),
+        leaveUids.data(),
+        sizeof(int32_t) * listSize);
+
+    SendPacket(me, sendOv);
+
+}
+
+
+
 void SessionManager::UpdateSssionMovement(float deltaTime)
 {
     std::vector<Session*> targets = GetSessionsSnapshot();
@@ -335,6 +531,8 @@ void SessionManager::UpdateSssionMovement(float deltaTime)
 
 void SessionManager::ProcessMovement(Session* session, float deltaTime)
 {
+    if (session == nullptr || !session->isAuth) return;
+
 
     // 1. 목적지가 없으면 이동 종료
     if (!session->isMoving || session->pathQueue.empty()) {
@@ -370,12 +568,18 @@ void SessionManager::ProcessMovement(Session* session, float deltaTime)
 
         if (g_pTileMgr->TryOccupy(nextTile.x, nextTile.y, ENUM_TILE_NAME::player)) {
             g_pTileMgr->SetOccupied(session->x, session->y, ENUM_TILE_NAME::empty);
+
+
+            int _oldx = session->x;
+            int _oldy = session->y;
             session->x = nextTile.x;
             session->y = nextTile.y;
 
-
             // [중요] 좌표가 변했음을 마킹 (이동 종료 여부와 상관없이!)
             session->bPosChanged = true;
+
+
+
 
 
             session->pathQueue.pop_front();
@@ -385,6 +589,28 @@ void SessionManager::ProcessMovement(Session* session, float deltaTime)
                 session->moveTimer = 0.0f;
             }
            // session->bPosChanged = true; // 이동 성공 플래그
+
+
+            //위치가 변했으니  섹터 인덱스 변화 확인후 전송....
+            Pos oldIdx = g_pSectorMgr->GetSectorIndex(_oldx, _oldy);
+            Pos newIdx = g_pSectorMgr->GetSectorIndex(session->x, session->y);
+
+            if (oldIdx.x != newIdx.x || oldIdx.y != newIdx.y) {
+                // [중요] 섹터 매니저 리스트 업데이트
+                g_pSectorMgr->GetSector(oldIdx).Remove(session);
+                g_pSectorMgr->GetSector(newIdx).Add(session);
+
+                // [중요] 시야 동기화 (ENTER_LIST / LEAVE_LIST 전송)
+                SyncView(session, oldIdx, newIdx);
+            }
+            else {
+                // 섹터가 바뀌지 않았다면 주변 섹터(9개) 사람들에게 단순히 위치 변화만 알림
+                // (이것은 기존의 BroadcastAllLocations나 개별 이동 패킷으로 처리)
+                BroadcastMoveToNearby(session);
+            }
+
+
+
             break; // 한 프레임에 한 칸씩만 이동하려면 break
         }
         else {
@@ -401,6 +627,42 @@ void SessionManager::ProcessMovement(Session* session, float deltaTime)
 
 }
 
+
+void SessionManager::SyncView(Session* session, Pos oldIdx, Pos newIdx) 
+{
+    // 1. 사라지는 섹터 처리 (개별 LEAVE 또는 섹터 단위 리셋)
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            Pos targetIdx = { oldIdx.x + dx, oldIdx.y + dy };
+            if (!g_pSectorMgr->IsValidSector(targetIdx.x, targetIdx.y)) continue;
+
+            if (abs(targetIdx.x - newIdx.x) > 1 || abs(targetIdx.y - newIdx.y) > 1) {
+                // 이 섹터는 이제 안 보임. 
+                // 나(session)에게 이 섹터 사람들 다 지우라고 명령 (개별 ID로 보내거나 섹터 단위로)
+                SendSectorMembersLeave(session, targetIdx);
+
+                // 그 섹터 사람들에게 나(session) 지우라고 알림
+                BroadcastToSector(targetIdx, PACKET::CreateLeavePacket(session) , session->userUid );
+            }
+        }
+    }
+
+    // 2. 나타나는 섹터 처리 (ENTER_PLAYER_LIST 활용)
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            Pos targetIdx = { newIdx.x + dx, newIdx.y + dy };
+            if (!g_pSectorMgr->IsValidSector(targetIdx.x, targetIdx.y)) continue;
+
+            if (abs(targetIdx.x - oldIdx.x) > 1 || abs(targetIdx.y - oldIdx.y) > 1) {
+                // 새로 시야에 들어온 섹터! 이 섹터 사람들 목록을 한 번에 전송
+                SendSectorMembers(session, targetIdx); // 내부에서 ENTER_PLAYER_LIST 사용
+
+                // 그 섹터 사람들에게 나(session) 생성하라고 알림 (나는 혼자이므로 ENTER_PLAYER)
+                BroadcastToSector(targetIdx, PACKET::CreateEnterPacket(session),  session->userUid);
+            }
+        }
+    }
+}
 
 //void SendPacket(Session* session, OverlappedEx* sendOv) {
 //    bool failed = false;

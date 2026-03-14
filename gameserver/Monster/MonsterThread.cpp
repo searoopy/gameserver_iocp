@@ -18,7 +18,7 @@ std::thread g_MonsterThread;
 
 void MonsterThread()
 {
-    g_MonsterManager.CreateMonsters(80);
+    g_pMonsterManager->CreateMonsters(80);
     auto lastTick = std::chrono::steady_clock::now();
 
 	while (g_MonsterThreadRun)
@@ -78,7 +78,7 @@ void CleanMonsterThread() {
 
 void UpdateMonsters(float deltaTime)
 {
-    auto& monsters = g_MonsterManager.GetMonsters();
+    auto& monsters = g_pMonsterManager->GetMonsters();
     if (monsters.empty()) return;
 
     std::vector<Session*> _sessions = g_SessionManager.GetSessionsSnapshot();

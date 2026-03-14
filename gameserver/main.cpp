@@ -5,9 +5,8 @@
 #include <MSWSock.h>
 #include <thread>
 #include <ws2tcpip.h>
-
 #include <vector>
-
+#include <memory>
 
 
 #define _CRTDBG_MAP_ALLOC
@@ -29,13 +28,24 @@
 #include "Threads\MonitorSessions.h"
 #include "Monster/MonsterThread.h"
 #include "Threads/SessionThread.h"
+#include "GROUND_TILE\\SECTOR\SectorMgr.h"
+#include "Monster/MonsterMgr.h"
 
 int main()
 {
-
-
+	
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 	//_CrtSetBreakAlloc(342);
+	
+	//데이터 초기화...
+	
+	g_pTileMgr = std::make_unique<TileMgr>();
+	g_pSectorMgr = std::make_unique<SectorManager>();
+	
+	g_pSectorMgr->Init(g_pTileMgr->MapSizeX(), g_pTileMgr->MapSizeY());
+
+	g_pMonsterManager = std::make_unique<MonsterManager>();
+
 
 	//1. 윈속 초기화
 	WSAData wsaData;

@@ -57,6 +57,9 @@
     <ClCompile Include="Threads\SessionThread.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="GROUND_TILE\SECTOR\SectorMgr.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="MemoryPool.h">
@@ -108,6 +111,12 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="Threads\SessionThread.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="GROUND_TILE\SECTOR\SectorMgr.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="PROTOCOL\PACKET.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

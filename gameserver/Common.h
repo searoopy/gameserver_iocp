@@ -36,7 +36,7 @@ enum class IO_TYPE {
 	ACCEPT,
 	RECV,
 	SEND,
-	NONE,
+	//NONE,
 };
 
 // Overlapped 구조체를 확장하여 커스텀 데이터 보관
@@ -54,7 +54,8 @@ struct OverlappedEx {
 
 	OverlappedEx() {
 		memset(&overlapped, 0, sizeof(overlapped));
-		type = IO_TYPE::NONE;
+		//type = IO_TYPE::NONE;
+		type = IO_TYPE::SEND;
 		refCount = 0;
 	}
 

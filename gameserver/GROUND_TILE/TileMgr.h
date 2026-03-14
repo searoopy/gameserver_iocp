@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <atomic>
+#include <memory>
 
 //#define MAX_TILE_X 30
 //#define MAX_TILE_Y 30
@@ -59,4 +60,4 @@ private:
 
 };
 
-extern TileMgr* g_pTileMgr;
+extern std::unique_ptr<TileMgr> g_pTileMgr;

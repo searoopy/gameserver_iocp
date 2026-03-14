@@ -6,7 +6,7 @@
 
 
 //TileMgr g_ptileMgr;
-TileMgr* g_pTileMgr = new TileMgr();
+std::unique_ptr <TileMgr> g_pTileMgr ;
 
 using json = nlohmann::json;
 
