@@ -8,12 +8,24 @@
 #include "TileMgr.h"
 
 
-
 struct Pos
 {
-	int x, y;
-	bool operator==(const Pos& other) const { return x == other.x && y == other.y; }
+    Pos()
+    : x(0), y(0)
+    {
+
+    }
+
+    Pos(int _x, int _y)
+        :x(_x), y(_y)
+    {
+
+    }
+
+    int x, y;
+    bool operator==(const Pos& other) const { return x == other.x && y == other.y; }
 };
+
 
 
 struct Node

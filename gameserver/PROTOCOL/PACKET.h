@@ -49,22 +49,46 @@ namespace PACKET
     }
 
 
-
-    OverlappedEx* CreateLeavePacket(Session* target) {
+    OverlappedEx* CreateLeavePacket(int32_t leavingUserUid) {
         OverlappedEx* sendOv = GMemoryPool->Pop();
         sendOv->Init();
         sendOv->type = IO_TYPE::SEND;
         sendOv->refCount.store(1); // 나 혼자만 보낼 것이므로 1로 설정
 
         S2C_LeavePlayerPacket* pkt = reinterpret_cast<S2C_LeavePlayerPacket*>(sendOv->buffer);
-        pkt->header.id = static_cast<uint16_t>(Packet_S2C::SECTOR_ENTER_PLAYER);
+        pkt->header.id = static_cast<uint16_t>(Packet_S2C::SECTOR_LEAVE_PLAYER);
+        pkt->userUid = leavingUserUid;
+
+        // ... 기타 외형 정보 등
+        pkt->header.size = sizeof(S2C_LeavePlayerPacket);
+        return sendOv;
+    }
+
+    OverlappedEx* CreateLeavePacket(Session* target) {
+        /*
+        OverlappedEx* sendOv = GMemoryPool->Pop();
+        sendOv->Init();
+        sendOv->type = IO_TYPE::SEND;
+        sendOv->refCount.store(1); // 나 혼자만 보낼 것이므로 1로 설정
+
+        S2C_LeavePlayerPacket* pkt = reinterpret_cast<S2C_LeavePlayerPacket*>(sendOv->buffer);
+        pkt->header.id = static_cast<uint16_t>(Packet_S2C::SECTOR_LEAVE_PLAYER);
         pkt->userUid = target->userUid;
     
 
         // ... 기타 외형 정보 등
         pkt->header.size = sizeof(S2C_LeavePlayerPacket);
 
+        */
+
+
+        OverlappedEx* sendOv = CreateLeavePacket( static_cast<int32_t>(target->userUid));
+
         return sendOv;
     }
+
+
+
+
 
 }

@@ -18,7 +18,12 @@ std::thread g_MonsterThread;
 
 void MonsterThread()
 {
-    g_pMonsterManager->CreateMonsters(80);
+
+
+    g_pMonsterManager->CreateMonsters(1);
+
+
+
     auto lastTick = std::chrono::steady_clock::now();
 
 	while (g_MonsterThreadRun)

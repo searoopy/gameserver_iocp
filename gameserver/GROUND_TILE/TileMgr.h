@@ -17,6 +17,10 @@ enum class ENUM_TILE_NAME {
 
 using MapGrid = std::vector<std::vector<ENUM_TILE_NAME>>;
 
+
+
+
+
 class TileMgr
 {
 public:

@@ -30,7 +30,17 @@ struct Sector
 class SectorManager
 {
 private:
-    const int SECTOR_SIZE = 10;
+    /*
+    섹터 사이즈에 대하여....
+
+    width, height는 tilemgr의 타일 갯수이다
+    섹터사이즈는 이 타일의 개수라고 할수있다
+
+    10일경우 상하좌우 10칸의 공간이 하나의 섹터..
+    
+    
+    */
+    const int SECTOR_SIZE = 2;
     int m_width;
     int m_height;
     int m_sectorCountX;

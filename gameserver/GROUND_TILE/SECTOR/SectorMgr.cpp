@@ -9,7 +9,7 @@ void SectorManager::Init(int mapWidth, int mapHeight)
     m_height = mapHeight;
 
     m_sectorCountX = (mapWidth / SECTOR_SIZE) + 1;
-    m_sectorCountY = (mapHeight / SECTOR_SIZE) + 1;
+    m_sectorCountY = (mapHeight / SECTOR_SIZE) + 1; 
 
     int totalSectors = m_sectorCountX * m_sectorCountY;
 

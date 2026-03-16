@@ -127,7 +127,7 @@ void PacketHandler::Handle_C2S_ENTER(Session* session, PacketHeader* header) {
 
 
     //몬스터 정보 요청..
-    g_SessionManager.SendInitialMonsterLocations(session);
+    g_SessionManager.SendInitialMonsterLocations(session);            
 
     // 4. 본인에게는 성공 응답 패킷 전송
     // Send_S2C_EnterGameOk(session);

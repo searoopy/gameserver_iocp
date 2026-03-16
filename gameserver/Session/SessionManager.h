@@ -125,7 +125,7 @@ public:
     // 모든 접속자에게 패킷 전송 (채팅 등)
     void Broadcast(OverlappedEx* sendOv);
     void BroadcastNewUser(Session* newUser);
-    void BroadcastLeaveUser(int32_t leavingUser);
+    void BroadcastLeaveUser(int32_t leavingUser , Pos lastPos );
     void BroadcastMonsterMove(Monster* monster);
     void BroadcastAllLocations();    ///모든 유저에게 전송......
     void BroadcastMoveToNearby(Session* actor); // 센터 인근 총 9칸에 전송.

@@ -9,6 +9,7 @@
 #include "..\GROUND_TILE\SECTOR\SectorMgr.h"
 #include "..\PROTOCOL\PACKET.h"
 
+
 SessionManager g_SessionManager;
 
 
@@ -42,8 +43,43 @@ void SessionManager::Broadcast(OverlappedEx* sendOv) {
 }
 
 
-void SessionManager::BroadcastNewUser(Session* newUser) {
+void SessionManager::BroadcastNewUser(Session* newUser) 
+{
 
+    if (newUser == nullptr || !newUser->isAuth) return;
+
+    // 1. 내가 속한 섹터 좌표 구하기
+    Pos myIdx = g_pSectorMgr->GetSectorIndex(newUser->x, newUser->y);
+
+    // [A] 주변 사람들에게 "나"를 생성하라고 알림 (공유 패킷 사용)
+    OverlappedEx* myEnterOv = PACKET::CreateEnterPacket(newUser);
+    myEnterOv->refCount.store(0);
+
+    // 주변 9개 섹션 순회
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            Pos targetIdx = { myIdx.x + dx, myIdx.y + dy };
+            if (!g_pSectorMgr->IsValidSector(targetIdx.x, targetIdx.y)) continue;
+
+            // 주변 섹터 사람들에게 나(newUser)를 브로드캐스트
+            BroadcastToSector(targetIdx, myEnterOv, newUser->userUid);
+
+            // [B] "나"에게 주변 섹터 사람들 리스트를 한꺼번에 전송 (이미 만든 함수 활용)
+            // 각 섹터마다 리스트 패킷을 만들어서 newUser에게 쏩니다.
+            SendSectorMembers(newUser, targetIdx);
+        }
+    }
+
+    // 아무도 주변에 없었다면 메모리 반납
+    if (myEnterOv->refCount.load() == 0) {
+        GMemoryPool->Push(myEnterOv);
+    }
+
+
+
+
+
+    /*
     std::vector<Session*> activeSessions = GetSessionsSnapshot();
 
     // 2. 루프 밖에서 패킷 생성 (공용 데이터)
@@ -84,21 +120,50 @@ void SessionManager::BroadcastNewUser(Session* newUser) {
     }
 
     GMemoryPool->Push(sendOv); // 원본 반납
+    */
+
 }
 
 
 
-void SessionManager::BroadcastLeaveUser(int32_t leavingUserUid) {
+void SessionManager::BroadcastLeaveUser(int32_t leavingUserUid, Pos lastPos ) {
    // if (leavingUser->userUid == -1) return;
     if (leavingUserUid == -1) return;
 
 
+    //섹터에만 전송....
+    Pos currentIdx = g_pSectorMgr->GetSectorIndex(lastPos.x, lastPos.y);
 
+    // 공유 패킷 생성 (UID 기반)
+    OverlappedEx* sharedOv = PACKET::CreateLeavePacket(leavingUserUid);
+    sharedOv->refCount.store(0);
+
+    for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+            Pos targetIdx = { currentIdx.x + dx, currentIdx.y + dy };
+            if (!g_pSectorMgr->IsValidSector(targetIdx.x, targetIdx.y)) continue;
+
+            // 특정 UID를 제외하고 브로드캐스트
+            BroadcastToSector(targetIdx, sharedOv, leavingUserUid);
+        }
+    }
+
+    if (sharedOv->refCount.load() == 0) GMemoryPool->Push(sharedOv);
+
+
+
+
+
+    /*
+    
     //1.저ㅗㄴ송할 패킷 구성
     S2C_LeaveUserPacket leavePkt;
     leavePkt.header.id = static_cast<uint16_t>(Packet_S2C::LEAVE_USER);
     leavePkt.header.size = sizeof(S2C_LeaveUserPacket);
     leavePkt.userUid = leavingUserUid;
+
+
+    ///PACKET::
 
     // 2. 락 경합 최소화를 위한 스냅샷 생성
     // m_activeMutex를 아주 잠깐만 잡고 리스트를 복사합니다.
@@ -127,6 +192,9 @@ void SessionManager::BroadcastLeaveUser(int32_t leavingUserUid) {
         // 이제 120명 상황에서도 시스템 콜 부담 없이 순식간에 알림이 전달됩니다.
         SendPacket(target, sendOv);
     }
+    */
+
+
 
 
 }
@@ -837,6 +905,7 @@ void HandleDisconnect(Session* session) {
 
     // 2. 퇴장 알림을 위한 UID 백업 (세션이 초기화되기 전에 수행)
     int32_t backupUid = session->userUid;
+    Pos lastPos = Pos(session->x, session->y);
 
     // 타일 설정
 
@@ -880,6 +949,6 @@ void HandleDisconnect(Session* session) {
     // 5. [핵심] 다른 유저들에게 퇴장 알림 전송
     // Release 이후에 호출하여 목록 정리가 끝났음을 보장합니다.
     if (backupUid != -1) {
-        g_SessionManager.BroadcastLeaveUser(backupUid);
+        g_SessionManager.BroadcastLeaveUser(backupUid,  lastPos );
     }
 }

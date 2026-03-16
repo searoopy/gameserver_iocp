@@ -38,7 +38,7 @@ int main()
 	//_CrtSetBreakAlloc(342);
 	
 	//데이터 초기화...
-	
+	//todo: 나중에 gamesetting_manager 만들어서 거기서 통합 관리하면 좋을듯....?
 	g_pTileMgr = std::make_unique<TileMgr>();
 	g_pSectorMgr = std::make_unique<SectorManager>();
 	
