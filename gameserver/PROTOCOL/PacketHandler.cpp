@@ -3,6 +3,7 @@
 #include "Protocol.h"
 #include "..\GROUND_TILE\AStar.h"
 #include "..\GROUND_TILE\TileMgr.h"
+#include "..\GROUND_TILE\SECTOR\SectorMgr.h"
 
 void PacketHandler::Handle_C2S_LOGIN(Session* session, PacketHeader* header)
 {
@@ -24,7 +25,7 @@ void PacketHandler::Handle_C2S_LOGIN(Session* session, PacketHeader* header)
 
     // 3. 클라이언트에게 결과 전송 (S2C_LOGIN_RESULT)
     OverlappedEx* sendOv = GMemoryPool->Pop();
-    memset(sendOv, 0, sizeof(OverlappedEx));
+   // memset(sendOv, 0, sizeof(OverlappedEx));
     sendOv->type = IO_TYPE::SEND;
 
     S2C_LoginResult* resPkt = reinterpret_cast<S2C_LoginResult*>(sendOv->buffer);
@@ -39,7 +40,12 @@ void PacketHandler::Handle_C2S_LOGIN(Session* session, PacketHeader* header)
    // bool result = true;
    // memcpy(sendOv->buffer + sizeof(PacketHeader), &result, sizeof(bool));
 
-    SendPacket(session, sendOv);
+
+    Pos startIdx = g_pSectorMgr->GetSectorIndex(session->x, session->y);
+    g_pSectorMgr->GetSector(startIdx).Add(session);
+
+
+    g_pSessionManager->SendPacket(session, sendOv);
 }
 
 
@@ -64,7 +70,7 @@ void PacketHandler::Handle_C2S_CHAT(Session* session, PacketHeader* header) {
     memcpy(sendOv->buffer + sizeof(PacketHeader), chatMsg, payloadSize);
 
     // 3. 모든 사람에게 전송
-    g_SessionManager.Broadcast(sendOv);
+    g_pSessionManager->Broadcast(sendOv);
 }
 
 void PacketHandler::Handle_C2S_MOVE(Session* session, PacketHeader* header)
@@ -80,7 +86,7 @@ void PacketHandler::Handle_C2S_MOVE(Session* session, PacketHeader* header)
 
     // 3. 주변 유저에게 알림 (지금은 전체 유저에게 브로드캐스트)
     OverlappedEx* sendOv = GMemoryPool->Pop();
-    memset(sendOv, 0, sizeof(OverlappedEx));
+    //memset(sendOv, 0, sizeof(OverlappedEx));
     sendOv->type = IO_TYPE::SEND;
 
     // S2C_MovePacket 구조체 크기에 맞춰 버퍼 세팅
@@ -94,7 +100,7 @@ void PacketHandler::Handle_C2S_MOVE(Session* session, PacketHeader* header)
    // resPkt->yaw = session->yaw;
 
     // 모든 사람에게 전송 (나 자신을 포함해도 되고 제외해도 되지만, 보통 확인을 위해 포함)
-    g_SessionManager.Broadcast(sendOv);
+    g_pSessionManager->Broadcast(sendOv);
 
 
 }
@@ -123,11 +129,11 @@ void PacketHandler::Handle_C2S_ENTER(Session* session, PacketHeader* header) {
 
     // 3. 여기서 호출!
     // 주변 유저들에게 "나 들어왔어!"라고 알림
-    g_SessionManager.BroadcastNewUser(session);
+    g_pSessionManager->BroadcastNewUser(session);
 
 
     //몬스터 정보 요청..
-    g_SessionManager.SendInitialMonsterLocations(session);            
+    g_pSessionManager->SendInitialMonsterLocations(session);
 
     // 4. 본인에게는 성공 응답 패킷 전송
     // Send_S2C_EnterGameOk(session);

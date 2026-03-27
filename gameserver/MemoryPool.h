@@ -3,6 +3,9 @@
 #include <queue>
 #include <WinSock2.h>
 
+
+extern SLIST_HEADER g_poolHeader;
+
 struct OverlappedEx;
 
 struct alignas(16) TaggedPtr
@@ -35,7 +38,7 @@ private:
     //캐쉬 라인 히트를 위해 변경.
    // alignas(16) std::atomic<TaggedPtr> _top;
 
-    alignas(16) TaggedPtr _top;
+   // alignas(16) TaggedPtr _top;
 
 
 };

@@ -80,7 +80,7 @@
     <ClInclude Include="PROTOCOL\PacketHandler.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="PROTOCOL\Protocol.h">
+    <ClInclude Include="PROTOCOL\PROTOCOL.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="Threads\MonitorSessions.h">

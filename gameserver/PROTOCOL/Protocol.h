@@ -29,16 +29,17 @@ enum class Packet_S2C : uint16_t {
 
 
     MONSTER_MOVE = 6,
+    MONSTER_ENTER ,
+    MONSTER_LEAVE,
 
+    ALL_LOCATE ,
+    MONSTER_SPAWN ,
 
-    ALL_LOCATE = 7,
-    MONSTER_SPAWN = 8,
+    SECTOR_ENTER_PLAYER_LIST ,
+    SECTOR_LEAVE_PLAYER_LIST ,
 
-    SECTOR_ENTER_PLAYER_LIST = 9,
-    SECTOR_LEAVE_PLAYER_LIST = 10,
-
-    SECTOR_ENTER_PLAYER = 12,
-    SECTOR_LEAVE_PLAYER = 13,
+    SECTOR_ENTER_PLAYER ,
+    SECTOR_LEAVE_PLAYER ,
 
 
 
@@ -111,9 +112,10 @@ struct S2C_LeaveUserPacket
 struct S2C_MonsterMovePacket
 {
     PacketHeader header;
-    int32_t userUid;
+    //int32_t userUid;
     int32_t monsterId;
     int32_t x, y;
+    float speed;
 
 };
 
@@ -154,6 +156,15 @@ struct S2C_LeavePlayerListPacket {
 };
 
 
+struct S2C_MovePlayerPacket
+{
+    PacketHeader header;
+
+    PlayerEntryInfo playerInfo;
+
+};
+
+
 struct S2C_EnterPlayerPacket
 {
     PacketHeader header;
@@ -167,6 +178,38 @@ struct S2C_LeavePlayerPacket
 {
     PacketHeader header;
     int32_t userUid;
+};
+
+
+// sector 몬스터 이동.....
+struct MonsterEntryInfo {
+    int32_t monsterUid;
+    int32_t x, y;
+    float speed;
+    // 필요한 추가 정보 (직업, 외형 등)
+};
+
+struct S2C_MoveMonsterPacket
+{
+    PacketHeader header;
+
+    MonsterEntryInfo monsterInfo;
+
+};
+
+struct S2C_EnterMonsterPacket
+{
+    PacketHeader header;
+
+    MonsterEntryInfo monsterInfo;
+
+};
+
+struct S2C_LeaveMonsterPacket
+{
+    PacketHeader header;
+
+    int32_t monsterUid;
 };
 
 

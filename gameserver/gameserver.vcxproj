@@ -78,7 +78,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(SolutionDir)include;$(SolutionDir)Data;$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <LanguageStandard>Default</LanguageStandard>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -91,7 +91,10 @@
   <ItemGroup>
     <ClCompile Include="Common.cpp" />
     <ClCompile Include="Debug.cpp" />
-    <ClCompile Include="GROUND_TILE\SECTOR\SectorMgr.cpp" />
+    <ClCompile Include="GROUND_TILE\SECTOR\SectorMgr.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="GROUND_TILE\TileMgr.cpp" />
     <ClCompile Include="MemoryPool.cpp" />
     <ClCompile Include="main.cpp" />
@@ -118,7 +121,7 @@
     <ClInclude Include="PROTOCOL\PACKET.h" />
     <ClInclude Include="PROTOCOL\PacketHandler.h" />
     <ClInclude Include="PROTOCOL\ProcessPacket.h" />
-    <ClInclude Include="PROTOCOL\Protocol.h" />
+    <ClInclude Include="PROTOCOL\PROTOCOL.h" />
     <ClInclude Include="Session\Session.h" />
     <ClInclude Include="Session\SessionManager.h" />
     <ClInclude Include="Threads\MonitorSessions.h" />

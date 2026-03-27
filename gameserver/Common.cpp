@@ -18,11 +18,14 @@ void LoadAcceptEx(SOCKET listenSocket) {
 
 bool RegisterAccept(HANDLE hIOCP, SOCKET listenSocket) {
 	// 1. 미리 소켓을 생성
-	SOCKET clientSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+	SOCKET clientSocket = WSASocket(AF_INET, SOCK_STREAM, 0 , NULL, 0, WSA_FLAG_OVERLAPPED);
+	if (clientSocket == INVALID_SOCKET) return false;
+
 
 	// 2. 컨텍스트 할당 (힙 영역)
 	OverlappedEx* acceptContext = GMemoryPool->Pop();//new OverlappedEx();
-	memset(acceptContext, 0, sizeof(OverlappedEx));
+	acceptContext->Init();
+	//memset(acceptContext, 0, sizeof(OverlappedEx));
 	acceptContext->type = IO_TYPE::ACCEPT;
 	acceptContext->sessionSocket = clientSocket;
 
@@ -31,7 +34,7 @@ bool RegisterAccept(HANDLE hIOCP, SOCKET listenSocket) {
 	// 주소 버퍼는 최소 (sizeof(SOCKADDR_IN) + 16) * 2 크기여야 합니다.
 	if (lpfnAcceptEx(listenSocket, clientSocket, acceptContext->buffer, 0,
 		sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16,
-		&bytesReceived, (LPOVERLAPPED)acceptContext) == FALSE) {
+		&bytesReceived, (LPOVERLAPPED)&acceptContext->overlapped) == FALSE) {
 		if (WSAGetLastError() != ERROR_IO_PENDING) {
 			//delete acceptContext;
 			closesocket(clientSocket);

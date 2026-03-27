@@ -65,9 +65,18 @@ void TileMgr::GenerateMap()
         json mapData;
         file >> mapData;
 
+        // JSON의 data 배열 접근
+        const auto& dataArray = mapData["data"];
+
         // JSON에서 가로, 세로 크기 가져오기 (제공된 데이터는 float 형태이므로 int 변환)
-        int jsonWidth = static_cast<int>(mapData["width"]);
-        int jsonHeight = static_cast<int>(mapData["height"]);
+        //int jsonWidth = static_cast<int>(mapData["width"]);
+       // int jsonHeight = static_cast<int>(mapData["height"]);
+
+        int jsonHeight = static_cast<int>(dataArray.size());
+        int jsonWidth = (jsonHeight > 0) ? static_cast<int>(dataArray[0].size()) : 0;
+
+  
+
 
         map_size_x = jsonWidth;
         map_size_y = jsonHeight;
@@ -75,8 +84,7 @@ void TileMgr::GenerateMap()
 
         map.assign(map_size_y, std::vector<ENUM_TILE_NAME>(map_size_x, ENUM_TILE_NAME::empty));
 
-        // JSON의 data 배열 접근
-        const auto& dataArray = mapData["data"];
+     
 
         for (int y = 0; y < jsonHeight; ++y) {
             // 배열 범위를 넘지 않도록 체크
@@ -173,7 +181,7 @@ bool TileMgr::IsWalkable(int nextX, int nextY)
         return false;
     }
 
-    return  map[nextX][nextY] == ENUM_TILE_NAME::empty;
+    return  map[nextY][nextX] == ENUM_TILE_NAME::empty;
    // return false;
 }
 

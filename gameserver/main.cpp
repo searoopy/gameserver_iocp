@@ -44,7 +44,9 @@ int main()
 	
 	g_pSectorMgr->Init(g_pTileMgr->MapSizeX(), g_pTileMgr->MapSizeY());
 
-	g_pMonsterManager = std::make_unique<MonsterManager>();
+
+	g_pSessionManager = std::make_unique<SessionManager>(); //유저  관리자
+	g_pMonsterManager = std::make_unique<MonsterManager>(); //몬스터 관리자 
 
 
 	//1. 윈속 초기화
@@ -58,7 +60,7 @@ int main()
 		return 0;
 	}
 
-	GMemoryPool = new MemoryPool(MAX_SESSION*20); // 동접*4만큼 우표 미리 생성
+	GMemoryPool = new MemoryPool(MAX_SESSION*50); // 동접*4만큼 우표 미리 생성
 
 
 	//2. iocp 핸들 생성.
@@ -107,7 +109,7 @@ int main()
 
 
 	//4. 리슨 소켓을 IOCP핸들에 등록
-	if( CreateIoCompletionPort((HANDLE)listenSocket, hIOCP,0,0 ) == NULL )
+	if( CreateIoCompletionPort((HANDLE)listenSocket, hIOCP, LISTEN_KEY ,0 ) == NULL )
 	{
 		std::cout << "소켓 iocp 등록 실패\n";
 		return 0;
@@ -143,7 +145,7 @@ int main()
 
 
 	//몬스터 스레드 생성
-	StartMonsterThread();
+	//StartMonsterThread();
 
 
 	//세션 스레드 생성.

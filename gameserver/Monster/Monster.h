@@ -17,7 +17,7 @@ class Monster
 public:
 	Monster(int32_t id)
 		:monsterId(id), hp(100), state(MONSTER_STATE::IDLE),
-		moveTimer(0.0f) , speed(1)
+		moveTimer(0.0f) , speed(0.5f)
 	{
 		pos.x = 0; pos.y = 0;
 		

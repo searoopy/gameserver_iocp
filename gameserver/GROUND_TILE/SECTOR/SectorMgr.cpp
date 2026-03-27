@@ -1,5 +1,11 @@
+
+#define NOMINMAX  // 최상단에 추가
 #include "SectorMgr.h"
+
+
 #include <algorithm>
+#include "..\..\Session\Session.h"
+#include "..\AStar.h"
 
 std::unique_ptr <SectorManager> g_pSectorMgr;
 
@@ -69,6 +75,9 @@ Sector& SectorManager::GetSectorByTile(int tileX, int tileY) {
 
 void SectorManager::GetNearbySessions(int x, int y, std::vector<Session*>& outSessions) {
     Pos center = GetSectorIndex(x, y);
+    
+    //한 섹션당 평균 10명이라고 가정 시 90명) 구역 9칸 100명...
+    outSessions.reserve(100);
 
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
@@ -78,7 +87,8 @@ void SectorManager::GetNearbySessions(int x, int y, std::vector<Session*>& outSe
             // 범위 체크
             if (nx >= 0 && nx < m_sectorCountX && ny >= 0 && ny < m_sectorCountY) {
                 Sector& sector = GetSector(nx, ny);
-                std::lock_guard<std::mutex> lock(sector.sectorMutex);
+                //std::lock_guard<std::mutex> lock(sector.sectorMutex);
+                std::shared_lock<std::shared_mutex> lock(sector.sessionLock); // 쓰기 모드 (독점)
 
                 if (!sector.sessions.empty()) {
                     outSessions.insert(outSessions.end(), sector.sessions.begin(), sector.sessions.end());

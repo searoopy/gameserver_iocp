@@ -13,22 +13,52 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
 
     while (true)
     {
+       
         BOOL result = GetQueuedCompletionStatus(
             hIOCP, &bytesTransferred, &completionKey, &overlapped, INFINITE
         );
 
         // 1. 종료 신호 처리
-        if (overlapped == NULL && completionKey == 0) break;
+        if (overlapped == NULL) {
+            // 종료 신호이거나 비정상적인 상황
+            if (completionKey == 0) break;
+            continue;
+        }
 
-        OverlappedEx* ovEx = reinterpret_cast<OverlappedEx*>(overlapped);
-        Session* session = reinterpret_cast<Session*>(completionKey);
+        // [핵심 수정] overlapped 포인터로부터 OverlappedEx 구조체의 시작 주소를 얻어옴
+        // 구조체 타입, 멤버 이름 순서로 넣어줍니다.
+        OverlappedEx* ovEx = CONTAINING_RECORD(overlapped, OverlappedEx, overlapped);
+       // OverlappedEx* ovEx = reinterpret_cast<OverlappedEx*>(overlapped);
+
+        Session* session = nullptr;
+
+        if (completionKey != LISTEN_KEY && completionKey != 0) {
+            session = reinterpret_cast<Session*>(completionKey);
+        }
 
         // 2. I/O 실패 처리 (소켓 끊김 등)
         if (!result) {
-            if (session != nullptr) HandleDisconnect(session);
+            if (session != nullptr) g_pSessionManager->HandleDisconnect(session);
             if (ovEx != nullptr) GMemoryPool->Push(ovEx);
             continue;
         }
+
+        // 2. 리슨 소켓 이벤트인데 SEND/RECV가 왔다면 무시 (방어 코드)
+        if (completionKey == LISTEN_KEY && ovEx->type != IO_TYPE::ACCEPT) {
+           
+            printf("!!! Critical: Logic Error. ListenKey with Type %d\n", ovEx->type);
+            // GMemoryPool->Push(ovEx); // 이미 오염된 주소일 수 있으므로 주의
+            continue;
+        }
+
+        if (session == nullptr && ovEx->type != IO_TYPE::ACCEPT) {
+            // 세션이 없는데 SEND/RECV가 왔다면 로직 오류나 비정상 소켓입니다.
+            if(ovEx!= nullptr)
+                GMemoryPool->Push(ovEx);
+            continue;
+        }
+
+
 
         switch (ovEx->type)
         {
@@ -40,18 +70,25 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
             setsockopt(ovEx->sessionSocket, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, (char*)&listenSocket, sizeof(SOCKET));
             OptimizeSocketBuffer(ovEx->sessionSocket);
 
-            Session* newSession = g_SessionManager.Acquire();
+            Session* newSession = g_pSessionManager->Acquire();
             if (newSession == nullptr) {
                 closesocket(ovEx->sessionSocket);
                 GMemoryPool->Push(ovEx);
                 break;
             }
             newSession->socket = ovEx->sessionSocket;
-            CreateIoCompletionPort((HANDLE)newSession->socket, hIOCP, (ULONG_PTR)newSession, 0);
+            if (CreateIoCompletionPort((HANDLE)newSession->socket, hIOCP, (ULONG_PTR)newSession, 0) == NULL) {
+                // 등록 실패 처리
+                g_pSessionManager->HandleDisconnect(newSession);
+                GMemoryPool->Push(ovEx);
+                break;
+            }
 
             // [수정] 첫 RECV 예약 (WSASend -> WSARecv로 변경)
             OverlappedEx* recvOv = GMemoryPool->Pop();
-            memset(recvOv, 0, sizeof(OVERLAPPED)); // 헤더만 초기화
+            recvOv->Init();
+            //memset(&recvOv->overlapped, 0, sizeof(OVERLAPPED));
+            //memset(recvOv, 0, sizeof(OVERLAPPED)); // 헤더만 초기화
             recvOv->type = IO_TYPE::RECV;
 
             WSABUF wsaBuf;
@@ -59,21 +96,24 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
             wsaBuf.len = newSession->GetFreeSize();
             DWORD flags = 0;
 
-            if (WSARecv(newSession->socket, &wsaBuf, 1, NULL, &flags, (LPOVERLAPPED)recvOv, NULL) == SOCKET_ERROR) {
+            if (WSARecv(newSession->socket, &wsaBuf, 1, NULL, &flags, (LPOVERLAPPED)&recvOv->overlapped, NULL) == SOCKET_ERROR) {
                 if (WSAGetLastError() != ERROR_IO_PENDING) {
                     GMemoryPool->Push(recvOv);
-                    HandleDisconnect(newSession);
+                    g_pSessionManager->HandleDisconnect(newSession);
                 }
             }
-            GMemoryPool->Push(ovEx);
+
+            if (ovEx != nullptr)
+                GMemoryPool->Push(ovEx);
             break;
         }
 
         case IO_TYPE::RECV:
         {
             if (bytesTransferred == 0) {
-                HandleDisconnect(session); // 주석 해제
-                GMemoryPool->Push(ovEx);
+                g_pSessionManager->HandleDisconnect(session); // 주석 해제
+                if(ovEx != nullptr)
+                    GMemoryPool->Push(ovEx);
                 break;
             }
 
@@ -84,7 +124,7 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
                 PacketHeader* header = reinterpret_cast<PacketHeader*>(session->recvBuffer + session->readPos);
 
                 if (header->size < sizeof(PacketHeader) || header->size > 1024 * 10) { // 매직 넘버 방어
-                    HandleDisconnect(session);
+                    g_pSessionManager->HandleDisconnect(session);
                     GMemoryPool->Push(ovEx);
                     break; // return;
                 }
@@ -101,10 +141,12 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
             wsaBuf.len = session->GetFreeSize();
             DWORD flags = 0;
 
-            if (WSARecv(session->socket, &wsaBuf, 1, NULL, &flags, (LPOVERLAPPED)ovEx, NULL) == SOCKET_ERROR) {
+            if (WSARecv(session->socket, &wsaBuf, 1, NULL, &flags, (LPOVERLAPPED)&ovEx->overlapped, NULL) == SOCKET_ERROR) {
                 if (WSAGetLastError() != ERROR_IO_PENDING) {
-                    HandleDisconnect(session);
-                    GMemoryPool->Push(ovEx);
+                    g_pSessionManager->HandleDisconnect(session);
+
+                    if (ovEx != nullptr)
+                        GMemoryPool->Push(ovEx);
                 }
             }
             break;
@@ -112,73 +154,28 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
 
         case IO_TYPE::SEND:
         {
-            /*
+           
             Session* session = reinterpret_cast<Session*>(completionKey);
-            std::vector<OverlappedEx*> finishedList;
-            WSABUF wsaBufs[WSA_BUFF_CNT];
-            int bufCount = 0;
-            OverlappedEx* firstTarget = nullptr;
 
-            {
-                std::lock_guard<std::mutex> lock(session->sendMutex);
-
-                // 1. [중요] 지난번에 실제 '전송 요청'했던 개수만큼 큐에서 제거
-                int lastPendingCount = session->sendPendingCount;
-                for (int i = 0; i < lastPendingCount; ++i) {
-                    if (!session->sendQueue.empty()) {
-                        finishedList.push_back(session->sendQueue.front());
-                        session->sendQueue.pop_front();
-                    }
-                }
-                session->sendPendingCount = 0; // 초기화
-
-                // 2. 새로 보낼 패킷들 모으기
-                if (!session->sendQueue.empty()) {
-                    for (auto* ov : session->sendQueue) {
-                        if (bufCount >= WSA_BUFF_CNT) break;
-                        wsaBufs[bufCount].buf = ov->buffer;
-                        wsaBufs[bufCount].len = reinterpret_cast<PacketHeader*>(ov->buffer)->size;
-
-                        if (bufCount == 0) firstTarget = ov;
-                        bufCount++;
-                    }
-                    // 이번에 몇 개 보내는지 기록!
-                    session->sendPendingCount = bufCount;
-                }
-                else {
-                    session->isSending = false;
-                }
+            if (!session) {
+                if (ovEx) GMemoryPool->Push(ovEx);
+                break;
             }
 
-            // 락 밖에서 메모리 반납
-            for (auto f : finishedList) GMemoryPool->Push(f);
-
-            // 3. 전송
-            if (firstTarget) {
-                DWORD sentBytes = 0;
-                if (WSASend(session->socket, wsaBufs, bufCount, &sentBytes, 0, (LPOVERLAPPED)firstTarget, NULL) == SOCKET_ERROR) {
-                    if (WSAGetLastError() != ERROR_IO_PENDING) {
-                        std::lock_guard<std::mutex> lock(session->sendMutex);
-                        session->isSending = false;
-                        session->sendPendingCount = 0;
-                    }
-                }
+            if (session->socket == INVALID_SOCKET || session->isFree.load()) {
+                // 전송 완료된 것들 메모리 반납 로직만 최소한으로 수행하거나 스킵
+                break;
             }
-            break;
 
-
-            */
-
-            Session* session = reinterpret_cast<Session*>(completionKey);
+           // Session* session = reinterpret_cast<Session*>(completionKey);
             std::vector<OverlappedEx*> toRelease;
             toRelease.reserve(WSA_BUFF_CNT);
-
-
             // 1. 다음 전송을 위한 준비물
             WSABUF wsaBufs[WSA_BUFF_CNT];
             int bufCount = 0;
             OverlappedEx* firstTarget = nullptr;
             bool initiateNextSend = false;
+
 
             {
                 std::lock_guard<std::mutex> lock(session->sendMutex);
@@ -229,14 +226,18 @@ void WorkerThread(HANDLE hIOCP, SOCKET listenSocket)
             }
 
             // --- [C] 락 밖에서 메모리 반납 및 다음 전송 호출 ---
-            for (auto* ov : toRelease) GMemoryPool->Push(ov);
+            for (auto* ov : toRelease)
+            {
+                if (ov != nullptr)
+                   GMemoryPool->Push(ov);
+            }
 
             if (initiateNextSend && firstTarget) {
                 SOCKET s = session->socket;
                 if (s != INVALID_SOCKET)
                 {
                     DWORD sentBytes = 0;
-                    if (WSASend(session->socket, wsaBufs, bufCount, &sentBytes, 0, (LPOVERLAPPED)firstTarget, NULL) == SOCKET_ERROR)
+                    if (WSASend(session->socket, wsaBufs, bufCount, &sentBytes, 0, (LPOVERLAPPED)&firstTarget->overlapped, NULL) == SOCKET_ERROR)
                     {
                         if (WSAGetLastError() != ERROR_IO_PENDING)
                         {

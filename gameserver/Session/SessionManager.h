@@ -5,6 +5,8 @@
 #include <string>
 #include <stack>
 #include "Session.h"
+#include "..\PROTOCOL\PROTOCOL.h"
+
 //#include <map>
 
 
@@ -129,12 +131,14 @@ public:
     void BroadcastMonsterMove(Monster* monster);
     void BroadcastAllLocations();    ///모든 유저에게 전송......
     void BroadcastMoveToNearby(Session* actor); // 센터 인근 총 9칸에 전송.
-    void BroadcastToSector(Pos sectorIdx, OverlappedEx* sharedOv, int exceptUid);
+    void BroadcastToSector(Pos sectorIdx, OverlappedEx* sharedOv, int exceptUid = -1 );
 
 
     void SendInitialMonsterLocations(Session* targe);
     void SendSectorMembers(Session* me, Pos sectorIdx);
     void SendSectorMembersLeave(Session* me, Pos sectorIdx);
+    void SendTotalMemberPacket(Session* target, std::vector<PlayerEntryInfo>& totalList);
+
 
     void UpdateSssionMovement(float deltaTime);
     void ProcessMovement( Session* session , float deltaTime);
@@ -142,6 +146,11 @@ public:
 
 
 
+    void CollectSectorMembers(Pos sectorIdx, Session* me, std::vector<PlayerEntryInfo>& outList);
+
+
+    void SendPacket(Session* session, OverlappedEx* sendOv);
+    void HandleDisconnect(Session* session);
 
 
 private:
@@ -155,8 +164,7 @@ private:
     std::vector<Session*> m_activeSessions; // 현재 접속 중인 세션들 (BroadCast용)
 };
 
-void SendPacket(Session* session, OverlappedEx* sendOv);
-void HandleDisconnect(Session* session);
 
 
-extern SessionManager g_SessionManager;
+extern std::unique_ptr < SessionManager> g_pSessionManager;
+//extern SessionManager* g_pSessionManager;

@@ -4,14 +4,28 @@
 #include <atomic>
 
 MemoryPool* GMemoryPool = nullptr;
+SLIST_HEADER g_poolHeader;
+
 
 struct SendPacket;
 struct OverlappedEx;
 struct Session;
-struct OverlappedEx;
 
 MemoryPool::MemoryPool(int capacity) 
 {
+
+    // 초기화 (생성자)
+    InitializeSListHead(&g_poolHeader);
+
+    for (int i = 0; i < capacity; ++i)
+    {
+        OverlappedEx* node = new OverlappedEx();
+        // SList에 직접 푸시 (이렇게 해야 Pop이 작동함)
+        InterlockedPushEntrySList(&g_poolHeader, reinterpret_cast<PSLIST_ENTRY>(node));
+    }
+
+
+    /*
     OverlappedEx* head = nullptr;
 
     for (int i = 0; i < capacity; ++i)
@@ -23,6 +37,7 @@ MemoryPool::MemoryPool(int capacity)
 
     _top.ptr = head;
     _top.tag = 0;
+    */
 }
 
 OverlappedEx* MemoryPool::Pop() 
@@ -34,6 +49,7 @@ OverlappedEx* MemoryPool::Pop()
     m_pool.pop();
     return obj;*/
 
+    /*
     while (true)
     {
         TaggedPtr oldTop = AtomicLoad128(&_top);
@@ -55,6 +71,19 @@ OverlappedEx* MemoryPool::Pop()
             return oldTop.ptr;
         }
     }
+    */
+
+    PSLIST_ENTRY entry = InterlockedPopEntrySList(&g_poolHeader);
+
+    if (entry == nullptr) {
+        OverlappedEx* newObj = new OverlappedEx();
+        newObj->Init(); // 초기화 함수 호출 잊지 마세요!
+        return newObj;
+    }
+
+    OverlappedEx* obj = reinterpret_cast<OverlappedEx*>(entry);
+    obj->Init(); // 꺼낸 객체는 항상 깨끗하게 초기화
+    return obj;
 
 }
 
@@ -64,6 +93,8 @@ void MemoryPool::Push(OverlappedEx* obj) {
     //memset(obj, 0, sizeof(OverlappedEx));
     //m_pool.push(obj);
 
+
+    /*
     if (!obj) return;
 
     while (true)
@@ -85,7 +116,13 @@ void MemoryPool::Push(OverlappedEx* obj) {
             return;
         }
     }
+    */
 
+    if (obj == nullptr) return;
+
+    // 다시 풀에 반납
+    InterlockedPushEntrySList(&g_poolHeader, reinterpret_cast<PSLIST_ENTRY>(obj));
+    //InterlockedPushEntrySList(&g_poolHeader, reinterpret_cast<PSLIST_ENTRY>(obj));
 
 }
 
@@ -95,6 +132,7 @@ MemoryPool::~MemoryPool() {
         m_pool.pop();
     }*/
 
+    /*
     TaggedPtr top = AtomicLoad128(&_top);
 
     OverlappedEx* current = top.ptr;
@@ -104,7 +142,12 @@ MemoryPool::~MemoryPool() {
         OverlappedEx* next = current->next;
         delete current;
         current = next;
+    }*/
+
+    while (PSLIST_ENTRY entry = InterlockedPopEntrySList(&g_poolHeader)) {
+        delete reinterpret_cast<OverlappedEx*>(entry);
     }
+
 
 }
 

@@ -15,5 +15,3 @@ void MonsterThread();
 void StartMonsterThread();
 
 void CleanMonsterThread();
-
-void UpdateMonsters(float deltaTime);

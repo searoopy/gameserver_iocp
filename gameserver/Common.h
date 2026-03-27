@@ -16,7 +16,7 @@
 //#include "Session/SessionManager.h"
 //#include "PROTOCOL\PacketHandler.h"
 
-
+#define LISTEN_KEY 9999
 
 //현대 운영체제(Windows)의 메모리 관리 최소 단위인 Page Size가 보통 **$4KB$**입니다.
 #define MAX_BUFFER_SIZE 1024*4
@@ -36,33 +36,58 @@ enum class IO_TYPE {
 	ACCEPT,
 	RECV,
 	SEND,
-	//NONE,
+	NONE,
 };
 
 // Overlapped 구조체를 확장하여 커스텀 데이터 보관
+__declspec(align(16))
 struct OverlappedEx {
+	SLIST_ENTRY item; //보존용
+
+	//여기서부터 memset------------
 	OVERLAPPED overlapped; // 반드시 첫 번째 멤버여야 함
 	IO_TYPE type;          // 작업 종류
 	SOCKET sessionSocket;    // AcceptEx 시 새로 생성한 소켓 보관용
 	char buffer[MAX_BUFFER_SIZE];       // 데이터 수신용 버퍼
+	// -----------------------------
+
+
+
 
 	std::atomic<int32_t> refCount; // 참조 카운트 추가
 
-	OverlappedEx* next = nullptr; // lock -free stack을 위한 링크.
+	//OverlappedEx* next = nullptr; // lock -free stack을 위한 링크.
 
 
 
 	OverlappedEx() {
-		memset(&overlapped, 0, sizeof(overlapped));
+
+		size_t clearSize = offsetof(OverlappedEx, refCount) - offsetof(OverlappedEx, overlapped);
+		memset(&overlapped, 0, clearSize);
+		//memset(&overlapped, 0, sizeof(overlapped));
 		//type = IO_TYPE::NONE;
-		type = IO_TYPE::SEND;
-		refCount = 0;
+		type = IO_TYPE::NONE;
+		//refCount.store(0);
+		refCount.store(0, std::memory_order_relaxed);
+
 	}
 
 	// 재사용을 위한 초기화 함수
 	void Init() {
-		memset(&overlapped, 0, sizeof(overlapped));
-		refCount = 0;
+		//memset(&overlapped, 0, sizeof(overlapped));
+
+		//const size_t skipSize = sizeof(SLIST_ENTRY);
+		//memset(&overlapped, 0, sizeof(OverlappedEx) - skipSize);
+
+		size_t clearSize = offsetof(OverlappedEx, refCount) - offsetof(OverlappedEx, overlapped);
+		memset(&overlapped, 0, clearSize);
+
+
+		// 2. atomic은 반드시 전용 함수 사용
+		refCount.store(0, std::memory_order_release);
+		type = IO_TYPE::NONE; // 필요한 기본값 설정
+		//buffer[0] = '\0';
+
 	}
 
 };

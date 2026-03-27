@@ -37,7 +37,7 @@ struct Session {
 	bool isMoving = false;
 	float moveTimer = 0.0f;
 	std::deque<Pos> pathQueue;
-	float speed = 20.0f;
+	float speed = 5.0f; //20.0f;
 	bool bPosChanged = false;
 
 	//send용 변수들.
@@ -54,6 +54,7 @@ struct Session {
 		userUid = -1;
 		nickname.clear();
 		isAuth = false;
+		isFree = false;
 		//isFree = true;
 		readPos = 0;
 		writePos = 0;
@@ -61,8 +62,8 @@ struct Session {
 		isMoving = false;
 		moveTimer = 0.0f;
 
-		x = 1;//static_cast<float>(get_random_number(0, 375));
-		y = 1;//static_cast<float>(get_random_number(0, 667));
+		x = 1;//1;//static_cast<float>(get_random_number(0, 375));
+		y = 3;// 1;//static_cast<float>(get_random_number(0, 667));
 
 		yaw = 0.0f;
 

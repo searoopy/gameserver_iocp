@@ -13,7 +13,7 @@ void MonitorSessions() {
         uint64_t currentTick = GetTickCount64();
 
         // 1. 스냅샷 찍기 (세션 매니저 내부 뮤텍스로 안전하게 복사본 확보)
-        std::vector<Session*> activeSessions = g_SessionManager.GetSessionsSnapshot();
+        std::vector<Session*> activeSessions = g_pSessionManager->GetSessionsSnapshot();
 
         int authUserCount = 0;
         int timeoutCount = 0;
@@ -35,14 +35,14 @@ void MonitorSessions() {
                //     << " (Nickname: " << (session->nickname.empty() ? L"Unknown" : session->nickname.c_str()) << ")" << std::endl;
 
                 // 세션 종료 처리 (이미 atomic 처리가 되어있으므로 안전하게 호출 가능)
-                HandleDisconnect(session);
+                g_pSessionManager->HandleDisconnect(session);
             }
         }
 
 
 
         // 4. 통계 출력 및 저장
-        int totalConnected = g_SessionManager.GetConnectSessionCnt();
+        int totalConnected = g_pSessionManager->GetConnectSessionCnt();
 
         // [콘솔 출력]
 
